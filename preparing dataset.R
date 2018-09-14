@@ -29,12 +29,6 @@ load("M:/DataStuff/cawa_ms_prediction_grid_data_by_ecoregion/pgdat-5.4.2.Rdata")
 dat5<-dat
 load("M:/DataStuff/cawa_ms_prediction_grid_data_by_ecoregion/pgdat-6.2.4.Rdata")
 dat6<-dat
-load("M:/DataStuff/cawa_ms_prediction_grid_data_by_ecoregion/pgdat-9.2.1.Rdata")
-dat7<-dat
-load("M:/DataStuff/cawa_ms_prediction_grid_data_by_ecoregion/pgdat-9.3.1.Rdata")
-dat8<-dat
-load("M:/DataStuff/cawa_ms_prediction_grid_data_by_ecoregion/pgdat-6.2.6.Rdata")
-dat9<-dat
 
 
 dat<-rbind(dat1,dat2,dat3,dat4,dat5,dat6,dat7,dat8,dat9)
