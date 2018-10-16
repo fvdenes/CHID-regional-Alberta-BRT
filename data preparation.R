@@ -28,6 +28,9 @@ eco <- raster("D:/CHID regional Alberta BRT/albertaeco1.tif")
 nalc <- raster("D:/CHID regional Alberta BRT/NA_LandCover_2005_LCC.img")
 alberta <- raster("D:/CHID regional Alberta BRT/AlbertaLCC.tif") 
 
+cti500<-raster("M:/DataStuff/SpatialData/ABTerrainNielsen/cti.asc")
+cti500<-projectRaster(cti500,crs=LCC)
+
 b2011 <- list.files("M:/DataStuff/SpatialData/Beaudoin/2011/",pattern="tif$")
 setwd("M:/DataStuff/SpatialData/Beaudoin/2011/")
 bs2011 <- stack(raster(b2011[1]))
@@ -40,7 +43,9 @@ r2 <- abs2011_1km[[1]]
 ecor1km <- resample(eco, abs2011_1km)
 abs2011_1km <- addLayer(abs2011_1km, ecor1km)
 names(abs2011_1km)[nlayers(abs2011_1km)] <- "eco"
-writeRaster(abs2011_1km,"AB2011rasters")
+abs2011_1km <- addLayer(abs2011_1km,cti500)
+names(abs2011_1km)[nlayers(abs2011_1km)] <- "cti"
+writeRaster(abs2011_1km,"AB2011rasters",overwrite=TRUE)
 
 b2001 <- list.files("M:/DataStuff/SpatialData/Beaudoin/2001/",pattern="tif$")
 setwd("M:/DataStuff/SpatialData/Beaudoin/2001/")
@@ -54,6 +59,12 @@ dat2011 <-cbind(dat2011,extract(nalc,as.matrix(cbind(dat2011$X,dat2011$Y))))
 names(dat2011)[ncol(dat2011)] <- "LCC"
 dat2011 <-cbind(dat2011,extract(eco,as.matrix(cbind(dat2011$X,dat2011$Y))))
 names(dat2011)[ncol(dat2011)] <- "eco"
+
+
+cti100<-raster("M:/DataStuff/SpatialData/ABTerrainNielsen/100-m/cti.asc")
+cti100<-projectRaster(cti100,crs=LCC)
+dat2011<-cbind(dat2011,extract(cti100,as.matrix(cbind(dat2011$X,dat2011$Y))))
+names(dat2011)[ncol(dat2011)] <- "cti"
 
 samprast2011 <- rasterize(cbind(dat2011$X,dat2011$Y), r2, field=1)
 sampsum25 <- focal(samprast2011, w=matrix(1/25, nc=5, nr=5), na.rm=TRUE)
@@ -73,6 +84,8 @@ dat2001 <-cbind(dat2001,extract(nalc,as.matrix(cbind(dat2001$X,dat2001$Y))))
 names(dat2001)[ncol(dat2001)] <- "LCC"
 dat2001 <-cbind(dat2001,extract(eco,as.matrix(cbind(dat2001$X,dat2001$Y))))
 names(dat2001)[ncol(dat2001)] <- "eco"
+dat2001<-cbind(dat2001,extract(cti100,as.matrix(cbind(dat2001$X,dat2001$Y))))
+names(dat2001)[ncol(dat2001)] <- "cti"
 
 samprast2001 <- rasterize(cbind(dat2001$X,dat2001$Y), r2, field=1)
 sampsum25 <- focal(samprast2001, w=matrix(1/25, nc=5, nr=5), na.rm=TRUE)
