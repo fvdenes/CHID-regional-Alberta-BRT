@@ -28,9 +28,6 @@ eco <- raster("D:/CHID regional Alberta BRT/albertaeco1.tif")
 nalc <- raster("D:/CHID regional Alberta BRT/NA_LandCover_2005_LCC.img")
 alberta <- raster("D:/CHID regional Alberta BRT/AlbertaLCC.tif") 
 
-cti500<-raster("M:/DataStuff/SpatialData/ABTerrainNielsen/cti.asc")
-cti500<-projectRaster(cti500,crs=LCC)
-
 b2011 <- list.files("M:/DataStuff/SpatialData/Beaudoin/2011/",pattern="tif$")
 setwd("M:/DataStuff/SpatialData/Beaudoin/2011/")
 bs2011 <- stack(raster(b2011[1]))
@@ -43,7 +40,13 @@ r2 <- abs2011_1km[[1]]
 ecor1km <- resample(eco, abs2011_1km)
 abs2011_1km <- addLayer(abs2011_1km, ecor1km)
 names(abs2011_1km)[nlayers(abs2011_1km)] <- "eco"
-abs2011_1km <- addLayer(abs2011_1km,cti500)
+
+cti500<-raster("M:/DataStuff/SpatialData/ABTerrainNielsen/cti.asc")
+cti500<-projectRaster(cti500,crs=LCC)
+cti_1km<-aggregate(cti500,fact=4, fun=mean)
+cti_1km<-resample(cti_1km,abs2011_1km)
+
+abs2011_1km <- addLayer(abs2011_1km,cti_1km)
 names(abs2011_1km)[nlayers(abs2011_1km)] <- "cti"
 writeRaster(abs2011_1km,"AB2011rasters",overwrite=TRUE)
 

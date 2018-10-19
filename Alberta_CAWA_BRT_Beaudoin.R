@@ -8,9 +8,10 @@ library(dplyr)
 
 load(("D:/CHID regional Alberta BRT/data_pack.RData"))
 
-# list of tree spp for AB:"Species_Abie_Bal_v1"    
+# list of tree spp for AB:
+#"Species_Abie_Bal_v1"    
 #"Species_Abie_Las_v1"                  
-#"Species_Alnu_Rub_v1"     
+#"Species_Alnu_Rub_v1"   # this one is absent from dataset   
 #"Species_Betu_Pap_v1"                 
 #"Species_Lari_Lar_v1"                                  
 #"Species_Pice_Gla_v1"               
@@ -22,6 +23,9 @@ load(("D:/CHID regional Alberta BRT/data_pack.RData"))
 #"Species_Pseu_Men_v1"                     
 #"Species_Thuj_Pli_v1"                      
 #"Species_Tsug_Het_v1"  
+
+# chech correlation among covariates
+cor(datcombo[,c(59,60,74,89,97,98,103,104,111,114,118,126,129,141,142,149)],method="spearman")
 
 # define list 
 w <-"D://CHID regional Alberta BRT/"
@@ -48,13 +52,17 @@ j<-which(speclist=="CAWA") # to run only for CAWA
   datcombo <- rbind(d2001,d2011)
   datcombo$eco <- as.factor(datcombo$eco)
   
-  x1 <- try(brt1 <- gbm.step(datcombo, gbm.y = 5, gbm.x = c(60,70,74,89,97,98,103,104,111,114,118,126,129,141,142), family = "poisson", tree.complexity = 3, learning.rate = 0.001, bag.fraction = 0.5, offset=datcombo$logoffset, site.weights=datcombo$wt))
+  x1 <- try(brt1 <- gbm.step(datcombo, gbm.y = 5, gbm.x = c(59,60,74,89,97,98,103,104,111,114,118,126,129,141,142,149), family = "poisson", tree.complexity = 3, learning.rate = 0.01, bag.fraction = 0.5, offset=datcombo$logoffset, site.weights=datcombo$wt))
   if (class(x1) != "try-error") {
     save(brt1,file=paste(w,speclist[j],"brtAB.R",sep=""))
     varimp <- as.data.frame(brt1$contributions)
     write.csv(varimp,file=paste(speclist[j],"varimp.csv",sep=""))
     cvstats <- t(as.data.frame(brt1$cv.statistics))
     write.csv(cvstats,file=paste(w,speclist[j],"cvstats.csv",sep=""))
+    find.int<-gbm.interactions(x1)
+    find.int$rank.list
+    find.int$interactions
+    gbm.perspec(x1,14,16)
     pdf(paste(w,speclist[j],"_plot.pdf",sep=""))
     gbm.plot(brt1,n.plots=9,smooth=TRUE, plot.layout = c(3,3))
     dev.off()
@@ -67,3 +75,26 @@ j<-which(speclist=="CAWA") # to run only for CAWA
   }
   
 #}
+  
+  # trying different BRT model with all tree spp
+  x2 <- try(brt2 <- gbm.step(datcombo, gbm.y = 5, gbm.x = c(58:132,141,142,149), family = "poisson", tree.complexity = 3, learning.rate = 0.01, bag.fraction = 0.5, offset=datcombo$logoffset, site.weights=datcombo$wt))
+  if (class(x1) != "try-error") {
+    save(brt2,file=paste(w,speclist[j],"brtAB.R",sep=""))
+    varimp2 <- as.data.frame(brt2$contributions)
+    write.csv(varimp2,file=paste(speclist[j],"varimp2.csv",sep=""))
+    cvstats2 <- t(as.data.frame(brt2$cv.statistics))
+    write.csv(cvstats2,file=paste(w,speclist[j],"cvstats2.csv",sep=""))
+    find.int<-gbm.interactions(x2)
+    find.int$rank.list
+    find.int$interactions
+    gbm.perspec(x2,14,16)
+    pdf(paste(w,speclist[j],"_plot2.pdf",sep=""))
+    gbm.plot(brt2,n.plots=9,smooth=TRUE, plot.layout = c(3,3))
+    dev.off()
+    rast2 <- predict(abs2011_1km, brt2, type="response", n.trees=brt2$n.trees)
+    writeRaster(rast, filename=paste(speclist[j],"_pred1km_2",sep=""), format="GTiff",overwrite=TRUE)
+    png(paste(speclist[j],"_pred1km_2.png",sep=""))
+    plot(rast2, zlim=c(0,1))
+    points(datcombo$X, datcombo$Y, cex=0.05)
+    dev.off()
+  }
