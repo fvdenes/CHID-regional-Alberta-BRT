@@ -77,9 +77,9 @@ j<-which(speclist=="CAWA") # to run only for CAWA
 #}
   
   # trying different BRT model with all tree spp
-  x2 <- try(brt2 <- gbm.step(datcombo, gbm.y = 5, gbm.x = c(58:132,141,142,149), family = "poisson", tree.complexity = 3, learning.rate = 0.01, bag.fraction = 0.5, offset=datcombo$logoffset, site.weights=datcombo$wt))
+  x2 <- try(brt2 <- gbm.step(datcombo, gbm.y = 5, gbm.x = c(58:60,62:68,70,72:75,77:84,86:91,94:100,102:107,109:112,114:121,124:130, 132,141,142,149), family = "poisson", tree.complexity = 2, learning.rate = 0.01, bag.fraction = 0.5, offset=datcombo$logoffset, site.weights=datcombo$wt))
   if (class(x1) != "try-error") {
-    save(brt2,file=paste(w,speclist[j],"brtAB.R",sep=""))
+    save(brt2,file=paste(w,speclist[j],"brtAB2.R",sep=""))
     varimp2 <- as.data.frame(brt2$contributions)
     write.csv(varimp2,file=paste(speclist[j],"varimp2.csv",sep=""))
     cvstats2 <- t(as.data.frame(brt2$cv.statistics))
@@ -89,7 +89,7 @@ j<-which(speclist=="CAWA") # to run only for CAWA
     find.int$interactions
     gbm.perspec(x2,14,16)
     pdf(paste(w,speclist[j],"_plot2.pdf",sep=""))
-    gbm.plot(brt2,n.plots=9,smooth=TRUE, plot.layout = c(3,3))
+    gbm.plot(brt2,n.plots=length(c(58:132,141,142,149)),smooth=TRUE, plot.layout = c(3,3))
     dev.off()
     rast2 <- predict(abs2011_1km, brt2, type="response", n.trees=brt2$n.trees)
     writeRaster(rast, filename=paste(speclist[j],"_pred1km_2",sep=""), format="GTiff",overwrite=TRUE)
