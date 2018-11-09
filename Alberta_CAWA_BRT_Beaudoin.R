@@ -9,41 +9,25 @@ library(dplyr)
 load(("D:/CHID regional Alberta BRT/data_pack.RData"))
 
 # list of tree spp for AB:
-#"Species_Abie_Bal_v1"    
-#"Species_Abie_Las_v1"                  
-#"Species_Alnu_Rub_v1"   # this one is absent from dataset   
-#"Species_Betu_Pap_v1"                 
-#"Species_Lari_Lar_v1"                                  
-#"Species_Pice_Gla_v1"               
-#"Species_Pice_Mar_v1"            
-#"Species_Pinu_Ban_v1"                       
-#"Species_Pinu_Con_v1"                   
-#"Species_Popu_Bal_v1"                     
-#"Species_Popu_Tre_v1"                                
-#"Species_Pseu_Men_v1"                     
-#"Species_Thuj_Pli_v1"                      
-#"Species_Tsug_Het_v1"  
 
-# chech correlation among covariates
-cor(datcombo[,c(59,60,74,89,97,98,103,104,111,114,118,126,129,141,142,149)],method="spearman")
 
 # define list 
-w <-"D://CHID regional Alberta BRT/"
+w <-"D://CHID regional Alberta BRT/BRT_outputs/"
 
 #for (j in 1:length(speclist)) { # to run for all spp. Make sure to uncomment the bracket at the end
 j<-which(speclist=="CAWA") # to run only for CAWA
-
+  
   specoff <- offl[offl$SPECIES==as.character(speclist[j]),]
   
   specdat2001 <- ABPC2001[ABPC2001$SPECIES == as.character(speclist[j]),] #n=423 for CAWA
-  dat1 <- right_join(specdat2001[,c(1:5)],survey2001[,1:3],by=c("SS","PCODE","PKEY")) #n=31864
+  dat1 <- right_join(specdat2001[,c(1:4,10)],survey2001[,1:3],by=c("SS","PCODE","PKEY")) #n=31864
   dat1$SPECIES <- as.character(speclist[j])
   dat1$ABUND <- as.integer(ifelse(is.na(dat1$ABUND),0,dat1$ABUND)) 
   s2001 <- left_join(dat1,specoff, by=c("SPECIES","PKEY"))
   d2001 <- left_join(s2001, dat2001, by=c("SS","PCODE")) 
   
   specdat2011 <- ABPC2011[ABPC2011$SPECIES == as.character(speclist[j]),] #n=989 for CAWA
-  dat1 <- right_join(specdat2011[,c(1:5)],survey2011[,1:3],by=c("SS","PCODE","PKEY")) #n=26314
+  dat1 <- right_join(specdat2011[,c(1:4,10)],survey2011[,1:3],by=c("SS","PCODE","PKEY")) #n=26314
   dat1$SPECIES <- as.character(speclist[j])
   dat1$ABUND <- as.integer(ifelse(is.na(dat1$ABUND),0,dat1$ABUND)) 
   s2011 <- left_join(dat1,specoff, by=c("SPECIES","PKEY"))
@@ -52,7 +36,43 @@ j<-which(speclist=="CAWA") # to run only for CAWA
   datcombo <- rbind(d2001,d2011)
   datcombo$eco <- as.factor(datcombo$eco)
   
-  x1 <- try(brt1 <- gbm.step(datcombo, gbm.y = 5, gbm.x = c(59,60,74,89,97,98,103,104,111,114,118,126,129,141,142,149), family = "poisson", tree.complexity = 3, learning.rate = 0.01, bag.fraction = 0.5, offset=datcombo$logoffset, site.weights=datcombo$wt))
+  #Setting up list of variables for model
+randomCV_brt(datcombo,nmodels=19,holdout = 0.3)
+
+  x1 <- try(brt1 <- gbm.step(datcombo, gbm.y = "ABUND", 
+                             gbm.x = c("LandCover_NonVeg_v1",
+                                       "Species_Abie_Bal_v1",
+                                       "Species_Abie_Las_v1",
+                                       "Species_Betu_Pap_v1",
+                                       "Species_Lari_Lar_v1",
+                                       "Species_Pice_Gla_v1",
+                                       "Species_Pice_Mar_v1",
+                                       "Species_Pinu_Ban_v1",
+                                       "Species_Pinu_Con_v1",
+                                       "Species_Popu_Bal_v1",
+                                       "Species_Popu_Tre_v1",
+                                       "Species_Pseu_Men_v1",
+                                       "Species_Thuj_Pli_v1",
+                                       "Species_Tsug_Het_v1",
+                                       "Structure_Biomass_TotalLiveAboveGround_v1",
+                                       "Structure_Stand_Age_v1",
+                                       "cti",
+                                       "CultivationCrop",
+                                       "IndustrialSiteRural",
+                                       "MineSite",
+                                       "Pipeline",
+                                       "RoadHardSurface",
+                                       "SeismicLineNarrow",
+                                       "SeismicLineWide",
+                                       "TransmissionLine",
+                                       "AHM",
+                                       "DD18",
+                                       "MAT",
+                                       "MAP",#in AB it might make more sense to use this instead of MSP because winters are so dry
+                                       "FFP",
+                                       "MWMT",
+                                       "MCMT"), 
+                             family = "poisson", tree.complexity = 3, learning.rate = 0.025, bag.fraction = 0.5, offset=datcombo$logoffset, site.weights=datcombo$wt))
   if (class(x1) != "try-error") {
     save(brt1,file=paste(w,speclist[j],"brtAB.R",sep=""))
     varimp <- as.data.frame(brt1$contributions)
@@ -64,7 +84,13 @@ j<-which(speclist=="CAWA") # to run only for CAWA
     find.int$interactions
     gbm.perspec(x1,14,16)
     pdf(paste(w,speclist[j],"_plot.pdf",sep=""))
-    gbm.plot(brt1,n.plots=9,smooth=TRUE, plot.layout = c(3,3))
+    gbm.plot(brt1,n.plots=32,smooth=TRUE, plot.layout = c(3,3),common.scale=T)
+    dev.off()
+    pdf(paste(w,speclist[j],"_plot.var-scale.pdf",sep=""))
+    gbm.plot(brt1,n.plots=32,smooth=TRUE, plot.layout = c(3,3),common.scale=F,write.title = F)
+    dev.off()
+    pdf(paste(w,speclist[j],"_plot.fitted.pdf",sep=""))
+    gbm.plot.fits(brt1)
     dev.off()
     rast <- predict(abs2011_1km, brt1, type="response", n.trees=brt1$n.trees)
     writeRaster(rast, filename=paste(speclist[j],"_pred1km",sep=""), format="GTiff",overwrite=TRUE)
@@ -76,25 +102,21 @@ j<-which(speclist=="CAWA") # to run only for CAWA
   
 #}
   
-  # trying different BRT model with all tree spp
-  x2 <- try(brt2 <- gbm.step(datcombo, gbm.y = 5, gbm.x = c(58:60,62:68,70,72:75,77:84,86:91,94:100,102:107,109:112,114:121,124:130, 132,141,142,149), family = "poisson", tree.complexity = 2, learning.rate = 0.01, bag.fraction = 0.5, offset=datcombo$logoffset, site.weights=datcombo$wt))
-  if (class(x1) != "try-error") {
-    save(brt2,file=paste(w,speclist[j],"brtAB2.R",sep=""))
-    varimp2 <- as.data.frame(brt2$contributions)
-    write.csv(varimp2,file=paste(speclist[j],"varimp2.csv",sep=""))
-    cvstats2 <- t(as.data.frame(brt2$cv.statistics))
-    write.csv(cvstats2,file=paste(w,speclist[j],"cvstats2.csv",sep=""))
-    find.int<-gbm.interactions(x2)
-    find.int$rank.list
-    find.int$interactions
-    gbm.perspec(x2,14,16)
-    pdf(paste(w,speclist[j],"_plot2.pdf",sep=""))
-    gbm.plot(brt2,n.plots=length(c(58:132,141,142,149)),smooth=TRUE, plot.layout = c(3,3))
-    dev.off()
-    rast2 <- predict(abs2011_1km, brt2, type="response", n.trees=brt2$n.trees)
-    writeRaster(rast, filename=paste(speclist[j],"_pred1km_2",sep=""), format="GTiff",overwrite=TRUE)
-    png(paste(speclist[j],"_pred1km_2.png",sep=""))
-    plot(rast2, zlim=c(0,1))
-    points(datcombo$X, datcombo$Y, cex=0.05)
-    dev.off()
-  }
+ surveypoints<-SpatialPointsDataFrame(coords=cbind(datcombo$X,datcombo$Y),data=datcombo,proj4string = LCC)
+ writeOGR(surveypoints,paste(w,"surveypoints.shp",sep=""),"surveypoints", driver="ESRI Shapefile")  
+
+ 
+ rm(surveypoints)
+ gc()
+ 
+ # Assessing sampling representativeness
+ library(gbm.auto)
+ m1<-as.data.frame(abs2011_1km, xy=T)
+
+ rsbdf_bin <- gbm.rsb(samples =datcombo, grids = m1, expvarnames = names(datcombo[expvar]), gridslat = 2, gridslon = 1)
+ unrep<-cbind(m1$x,m1$y, rsbdf_bin[,65])
+ 
+ unrep<-rasterFromXYZ(unrep,crs=LCC,res=1000)
+ plot(unrep)
+ 
+ summary(rsbdf_bin$Unrepresentativeness)
