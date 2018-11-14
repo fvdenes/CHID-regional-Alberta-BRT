@@ -6,7 +6,7 @@ library(data.table)
 library(rgdal)
 library(dplyr)
 
-load(("D:/CHID regional Alberta BRT/data_pack.RData"))
+load("D:/CHID regional Alberta BRT/AB_BRT_Rproject/data_pack.RData")
 
 # list of tree spp for AB:
 
@@ -36,8 +36,12 @@ j<-which(speclist=="CAWA") # to run only for CAWA
   datcombo <- rbind(d2001,d2011)
   datcombo$eco <- as.factor(datcombo$eco)
   
+  rm(list=setdiff(ls(),c("datcombo","abs2011_1km","w","LCC")))
+  gc()
   #Setting up list of variables for model
 randomCV_brt(datcombo,nmodels=19,holdout = 0.3)
+
+randomCV_brt(datcombo,nmodels=4,holdout = 0.3)
 
   x1 <- try(brt1 <- gbm.step(datcombo, gbm.y = "ABUND", 
                              gbm.x = c("LandCover_NonVeg_v1",
@@ -110,13 +114,35 @@ randomCV_brt(datcombo,nmodels=19,holdout = 0.3)
  gc()
  
  # Assessing sampling representativeness
- library(gbm.auto)
- m1<-as.data.frame(abs2011_1km, xy=T)
+ load("D:/CHID regional Alberta BRT/BRT_outputs/model1/CAWAbrtAB.R") # load example brt
+ brt1$var.names
+  mess1<-mess(abs2011_1km[[brt1$var.names]], extract(abs2011_1km[[brt1$var.names]],cbind(datcombo$X,datcombo$Y)))
+ 
+  writeRaster(mess1, filename="mess_brt_preds.tif", format="GTiff",overwrite=TRUE)
 
- rsbdf_bin <- gbm.rsb(samples =datcombo, grids = m1, expvarnames = names(datcombo[expvar]), gridslat = 2, gridslon = 1)
- unrep<-cbind(m1$x,m1$y, rsbdf_bin[,65])
  
- unrep<-rasterFromXYZ(unrep,crs=LCC,res=1000)
- plot(unrep)
  
- summary(rsbdf_bin$Unrepresentativeness)
+ # mean and coefficient of variation among the 20 brt models
+ load("D:/CHID regional Alberta BRT/BRT_outputs/model1/CAWAbrtAB.R")
+ brt_preds<-stack(raster("D:/CHID regional Alberta BRT/BRT_outputs/model1/CAWA_pred1km.tif"))
+ names(brt_preds)<-"model1"
+ for(i in 2:20){
+   brt_preds <- addLayer(brt_preds, raster(paste("D:/CHID regional Alberta BRT/BRT_outputs/model",i,"/CAWA_pred1km.tif",sep="")))
+   names(brt_preds)[[i]] <- paste("model",i,sep="")
+ }
+ 
+ brt_preds<-addLayer(brt_preds,overlay(brt_preds,fun=mean, na.rm=T))
+ names(brt_preds[[21]])<-"mean"
+ 
+ brt_preds<-addLayer(brt_preds,overlay(brt_preds,fun=sd, na.rm=T))
+ names(brt_preds[[22]])<-"SD"
+ 
+ brt_preds<-addLayer(brt_preds,overlay(brt_preds,fun=function(x) sd(x, na.rm=T)/mean(x,na.rm=T)))
+ names(brt_preds[[23]])<-"CV"
+ 
+ 
+ setwd("D:/CHID regional Alberta BRT/BRT_outputs")
+ writeRaster(brt_preds$mean, filename="mean_brt_preds.tif", format="GTiff",overwrite=TRUE)
+ writeRaster(brt_preds$SD, filename="SD_brt_preds.tif", format="GTiff",overwrite=TRUE)
+ writeRaster(brt_preds$CV, filename="CV_brt_preds.tif", format="GTiff",overwrite=TRUE)
+ 

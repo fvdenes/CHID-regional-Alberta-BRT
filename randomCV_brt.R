@@ -1,7 +1,7 @@
 randomCV_brt<-function(data,nmodels,holdout){
   
   for(i in 1:nmodels){
-    
+    w <-"D://CHID regional Alberta BRT/BRT_outputs/"
     z<-paste(w,"model",(1:nmodels)[i],"/",sep="")
     
     if (file.exists(z)==FALSE){dir.create(z)} 
@@ -72,17 +72,3 @@ randomCV_brt<-function(data,nmodels,holdout){
   
 }
 
-  
-  
-  
-  
- 
-    
-  
-  
-  
-  
-  
-  
-  
-  
