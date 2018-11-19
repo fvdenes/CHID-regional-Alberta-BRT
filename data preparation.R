@@ -39,7 +39,10 @@ for (i in 2:length(b2011)) { bs2011 <- addLayer(bs2011, raster(b2011[i]))}
 names(bs2011) <- gsub("NFI_MODIS250m_2011_kNN_","",names(bs2011))
 
 abs2011 <- crop(bs2011,alberta)
-abs2011 <- trim(abs2011)
+abs2011 <- mask(abs2011,alberta)
+
+writeRaster(abs2011, filename="abs2011_250m.grd", format="raster",overwrite=TRUE)
+
 gc()
 abs2011_1km <- aggregate(abs2011, fact=4, fun=mean)
 
@@ -55,7 +58,7 @@ ecor1km <- resample(eco, abs2011_1km)
 abs2011_1km <- addLayer(abs2011_1km, ecor1km)
 names(abs2011_1km)[nlayers(abs2011_1km)] <- "eco"
 
-cti500<-raster("D:/ABTerrainNielsen/cti.asc")
+cti500<-raster("D:/ABTerrainNielsen/500-m/cti.asc")
 cti500<-projectRaster(cti500,crs=LCC)
 cti_1km<-aggregate(cti500,fact=4, fun=mean)
 cti_1km<-resample(cti_1km,abs2011_1km)
