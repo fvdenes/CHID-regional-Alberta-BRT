@@ -280,4 +280,4 @@ speclist<-levels(as.factor(offl$SPECIES))
 
 rm(list=setdiff(ls(),c("pred_abs_2011","LCC","speclist","offl","ABPC2001","survey2001","dat2001","ABPC2011","survey2011","dat2011")))
 gc()
-save.image("D:/CHID regional Alberta BRT/data_pack.RData")
+save.image("D:/CHID regional Alberta BRT/AB_BRT_Rproject/data_pack.RData")

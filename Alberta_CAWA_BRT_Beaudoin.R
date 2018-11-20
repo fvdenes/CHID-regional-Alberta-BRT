@@ -36,7 +36,7 @@ j<-which(speclist=="CAWA") # to run only for CAWA
   datcombo <- rbind(d2001,d2011)
   datcombo$eco <- as.factor(datcombo$eco)
   
-  rm(list=setdiff(ls(),c("datcombo","pred_abs_2011","w","LCC")))
+  rm(list=setdiff(ls(),c("datcombo","pred_abs_2011","w","LCC","speclist","randomCV_brt","j")))
   gc()
   #Setting up list of variables for model
 randomCV_brt(datcombo,nmodels=19,holdout = 0.3)
@@ -145,6 +145,11 @@ randomCV_brt(datcombo,nmodels=4,holdout = 0.3)
 #}
 
   ### "weeding out less influential covariates (among those with Gaussian filters and those with 0 influence)
+  simp1<- gbm.simplify(brt1)
+  
+  
+  
+  
   
   x1 <- try(brt1 <- gbm.step(datcombo, gbm.y = "ABUND", 
                              gbm.x = c(#"LandCover_NonVeg_v1",
