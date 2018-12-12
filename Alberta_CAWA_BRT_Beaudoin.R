@@ -5,77 +5,41 @@ library(maptools)
 library(data.table)
 library(rgdal)
 library(dplyr)
+library(blockCV)
 
-
-
-#### A function that defines CV blocks and folds (using BlockCV package) and then fits BRT model (from dismo package) on pre-defined folds, and saves outputs
-
-
-
-blockCV_brt <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222, blocking.iterations = 250, pred.variables, autocorr.variables = NULL,output.folder="D://CHID regional Alberta BRT/BRT_outputs/CV_output/",keep.out = TRUE, tc=3,lr=0.001,bf=0.5){ 
+# A function that fits the BRT model ('gbm.step' from dismo package) on pre-defined folds, and saves outputs ####
+brt_blocks <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222, pred.variables ,output.folder, blocks=NULL, keep.out = TRUE, tc=3,lr=0.001,bf=0.5, save.points.shp=FALSE){ 
   # Arguments for this function
   ## data: data.frame object containing data for model fitting
   ## pred.stack: the raster stack/brick used as prediction dataset
-  ## seed: random seed for blocking
-  ## blocking.iterations: iterations for spatiaclBlock call
   ## pred.variables: a character vector giving the names of predictor variables that will be included in BRT models
-  ## autocorr.variables: a character vector giving the names of predictor variables that will be used for autocorrelation assessment that will inform block size. defaults to 'pred.variables'. user can specify a subset by excluding variables, as in pred.variables[-c(57:63)]
+  ## blocks: object resulting from 'spatialBlocks' function that contains classification of sample points into folds
   ## output.folder: path to output folder (if folder does not exist it is created)
-  ## keep.BRT: logical, whether to keep the outputs from 'spatialBlocks' and 'gbm.step' functions in the workspace. both are automatically saved in the output folder regardless
+  ## keep.out: logical, whether to keep the output in the workspace. both blocks object and the brt output are automatically saved in the output folder regardless
   ## tc: BRT tree complexity
   ## lr: BRT learning rate
   ## bf: BRT bag fraction
-  
-  library(gstat)
-  library(sp)
-  library(blockCV)
-  library(dismo)
-  
-  # resolve autocorrelation variables
-  if (is.null(autocorr.variables) == TRUE) {
-    autocorr.variables <- pred.variables
-  }
-  
-  # convert data into SpatialPointDataFrame class
-  datcombo_sp <-
-    SpatialPointsDataFrame(coords = datcombo[, 33:34],
-                           data = data,
-                           proj4string = LCC) # where columns 33:34 are the X and Y coordinates
-  
-  # create a column converting abundance to occupancy
-  datcombo_sp$OCCU <- 0 
-  datcombo_sp$OCCU[which(datcombo_sp$ABUND > 0)] <- 1
-  
-  # create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, HF, etc).
-  ind <- which(names(pred.stack) %in% autocorr.variables)
-  
-  # Calculate autocorrelation range
-  start_time <- Sys.time()
-  sp.auto.arr1 <- spatialAutoRange(pred.stack[[ind]])
-  end_time <- Sys.time()
-  end_time - start_time
-  
-  # Use spatial blocks to separate train and test folds
-  set.seed(seed)
-  sp_blocks <-
-    spatialBlock(
-      speciesData = datcombo_sp,
-      species = "OCCU",
-      rasterLayer = pred.stack[[1]],
-      iteration = blocking.iterations,
-      theRange = sp.auto.arr1$range,
-      selection = "random"
-    )
+  ## save.points.shp: logical, whether to save survey points as a shapefile in output folder
   
   # fit BRT models using pre-determined folds for CV
+  if (is.null(blocks)){
+    folds<-NULL
+    n.folds<-10
+  }
+  
+  else {
+    folds<-blocks$foldID
+    n.folds<-blocks$k
+  }
+  
   x1 <-
     try(brt1 <-
           gbm.step(
             datcombo,
             gbm.y = "ABUND",
             gbm.x = pred.variables,
-            fold.vector = sp_blocks$foldID,
-            n.folds = sp_blocks$k,
+            fold.vector = folds,
+            n.folds = n.folds,
             family = "poisson",
             tree.complexity = tc,
             learning.rate = lr,
@@ -86,7 +50,7 @@ blockCV_brt <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222
             keep.fold.fit = T
           ))
   
-  # Define/creat folders for storing outputs
+  # Define/create folders for storing outputs
   if (class(x1) != "try-error") {
     z <- output.folder
     
@@ -94,8 +58,15 @@ blockCV_brt <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222
       dir.create(z)
     }
     
-    save(sp_blocks, file = paste(z, speclist[j], "blocks", sep = ""))
-    save(brt1, file = paste(z, speclist[j], "brtAB.R", sep = ""))
+    if (is.null(blocks)){
+      save(brt1, file = paste(z, speclist[j], "brtAB.R", sep = ""))
+    }
+    
+    else {
+      save(blocks, file = paste(z, speclist[j], "blocks", sep = ""))
+      save(brt1, file = paste(z, speclist[j], "brtAB.R", sep = ""))
+    }  
+    
     
     ## Model evaluation
     varimp <- as.data.frame(brt1$contributions)
@@ -137,25 +108,27 @@ blockCV_brt <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222
       format = "GTiff",
       overwrite = TRUE
     )
+    
+    data_sp <-SpatialPointsDataFrame(coords = data[, 33:34], data = data, proj4string = LCC)
     png(paste(z, speclist[j], "_pred1km.png", sep = ""))
     plot(rast, zlim = c(0, 1))
-    points(datcombo_sp$X, datcombo_sp$Y, cex = 0.05)
+    points(data_sp$X, data_sp$Y, cex = 0.05)
     dev.off()
     
-    writeOGR(
-      datcombo_sp,
-      dsn = paste(z, "surveypoints.shp", sep = ""),
-      layer = "datcombo_sp",
-      driver = "ESRI Shapefile"
-    )
+    if(save.points.shp==T){
+      writeOGR(
+        data_sp,
+        dsn = paste(z, "surveypoints.shp", sep = ""),
+        layer = "data_sp",
+        driver = "ESRI Shapefile"
+      )
+    }
     
-    out<-list(brt1, sp_blocks)
-    if(keep.out==T) 
-      out
+    if(keep.out==T) {return(brt1)}
   }
 }
 
-#### load data and prepare objects
+#load data and prepare objects ####
 load("D:/CHID regional Alberta BRT/AB_BRT_Rproject/data_pack.RData")
 
 j<-which(speclist=="CAWA") 
@@ -176,12 +149,14 @@ d2011 <- left_join(s2011, dat2011, by=c("SS","PCODE"))
 datcombo <- rbind(d2001,d2011)
 datcombo$eco <- as.factor(datcombo$eco)
 
-rm(list=setdiff(ls(),c("datcombo","pred_abs_2011","w","LCC","speclist","randomCV_brt","j","blockCV_brt")))
+
+
+rm(list=setdiff(ls(),c("datcombo","datcombo_sp","pred_abs_2011","w","LCC","speclist","randomCV_brt","j","blockCV_brt")))
 gc()
 
 
-# Running blockCV_brt function for full model
-
+# Full model ####
+# list variables for full model
 pred.variables<-c( 
   "Species_Abie_Bal_v1",
   "Species_Abie_Bal_v1_Gauss250",
@@ -245,24 +220,440 @@ pred.variables<-c(
   "MCMT"
 )
 
+# convert data into SpatialPointDataFrame class
+datcombo_sp <-SpatialPointsDataFrame(coords = datcombo[, 33:34], data = datcombo, proj4string = LCC)
+
+# create a column converting abundance to occupancy
+datcombo_sp$OCCU <- 0 
+datcombo_sp$OCCU[which(datcombo_sp$ABUND > 0)] <- 1
+
+# create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, HF, etc).
+ind <- which(names(pred_abs_2011) %in% pred.variables[-c(54:60)])
+
+# Calculate autocorrelation range
+start_time <- Sys.time()
+sp.auto.arr1 <- spatialAutoRange(pred_abs_2011[[ind]])
+end_time <- Sys.time()
+end_time - start_time
+
+# Use spatial blocks to separate train and test folds
+start_time <- Sys.time()
+set.seed(seed)
+sp_block_full <-  spatialBlock(
+                      speciesData = datcombo_sp,
+                      species = "OCCU",
+                      rasterLayer = pred_abs_2011[[1]],
+                      iteration = 250,
+                      theRange = sp.auto.arr1$range,
+                      selection = "random",
+                      maskBySpecies = FALSE
+  )
+end_time <- Sys.time()
+end_time - start_time
+
 start_time<-Sys.time()
-brt1<- blockCV_brt(datcombo,pred.variables = pred.variables,autocorr.variables=pred.variables[-c(54:60)])  
+brt1<- brt_blocks(data=datcombo,pred.variables = pred.variables, output.folder = "D://CHID regional Alberta BRT/BRT_outputs/full_model/", blocks=sp_block_full, save.points.shp = TRUE)  
 end_time<-Sys.time()
 end_time-start_time
 
+# Simplified model (selecting most influential scales) ####
+pred.variables2<-c( 
+  #"Species_Abie_Bal_v1",
+  #"Species_Abie_Bal_v1_Gauss250",
+  "Species_Abie_Bal_v1_Gauss750",
+  #"Species_Betu_Pap_v1",
+  #"Species_Betu_Pap_v1_Gauss250",
+  "Species_Betu_Pap_v1_Gauss750",
+  #"Species_Lari_Lar_v1",
+  "Species_Lari_Lar_v1_Gauss250",
+  #"Species_Lari_Lar_v1_Gauss750",
+  #"Species_Pice_Gla_v1",
+  #"Species_Pice_Gla_v1_Gauss250",
+  "Species_Pice_Gla_v1_Gauss750",
+  "Species_Pice_Mar_v1",
+  #"Species_Pice_Mar_v1_Gauss250",
+  #"Species_Pice_Mar_v1_Gauss750",
+  #"Species_Pinu_Ban_v1",
+  #"Species_Pinu_Ban_v1_Gauss250",
+  "Species_Pinu_Ban_v1_Gauss750",
+  #"Species_Pinu_Con_v1",
+  #"Species_Pinu_Con_v1_Gauss250",
+  "Species_Pinu_Con_v1_Gauss750",
+  #"Species_Popu_Bal_v1",
+  #"Species_Popu_Bal_v1_Gauss250",
+  "Species_Popu_Bal_v1_Gauss750",
+  #"Species_Popu_Tre_v1",
+  "Species_Popu_Tre_v1_Gauss250",
+  #"Species_Popu_Tre_v1_Gauss750",
+  "Species_Pseu_Men_v1",
+  #"Species_Pseu_Men_v1_Gauss250",
+  #"Species_Pseu_Men_v1_Gauss750",
+  "Species_Thuj_Pli_v1",
+  #"Species_Thuj_Pli_v1_Gauss250",
+  #"Species_Thuj_Pli_v1_Gauss750",
+  "Species_Tsug_Het_v1",
+  #"Species_Tsug_Het_v1_Gauss250",
+  #"Species_Tsug_Het_v1_Gauss750",
+  #"Structure_Biomass_TotalLiveAboveGround_v1",
+  "Structure_Biomass_TotalLiveAboveGround_v1_Gauss250",
+  #"Structure_Biomass_TotalLiveAboveGround_v1_Gauss750",
+  "Structure_Stand_Age_v1",
+  #"Structure_Stand_Age_v1_Gauss250",
+  #"Structure_Stand_Age_v1_Gauss750",
+  #"cti250",
+  "cti250_Gauss250",
+  #"cti250_Gauss750",
+  "CultivationCrop",
+  "IndustrialSiteRural",
+  "MineSite",
+  "Pipeline",
+  "RoadHardSurface",
+  "SeismicLineNarrow",
+  "SeismicLineWide",
+  "TransmissionLine",
+  "AHM",
+  "DD18",
+  "MAT",
+  "MAP",
+  "FFP",
+  "MWMT",
+  "MCMT"
+)
+
+# create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, HF, etc).
+ind2 <- which(names(pred_abs_2011) %in% pred.variables2[-c(24:30)])
+
+# Calculate autocorrelation range
+start_time <- Sys.time()
+sp.auto.arr2 <- spatialAutoRange(pred_abs_2011[[ind2]])
+end_time <- Sys.time()
+end_time - start_time
+
+# Use spatial blocks to separate train and test folds
+start_time <- Sys.time()
+set.seed(142)
+sp_block_select <- spatialBlock(
+                      speciesData = datcombo_sp,
+                      species = "OCCU",
+                      rasterLayer = pred_abs_2011[[1]],
+                      iteration = 250,
+                      k=5,
+                      theRange = sp.auto.arr2$range,
+                      selection = "random",
+                      maskBySpecies = FALSE
+  )
+end_time <- Sys.time()
+end_time - start_time
 
 
+start_time<-Sys.time()
+brt2<- brt_blocks(data=datcombo,pred.variables = pred.variables2, output.folder = "D://CHID regional Alberta BRT/BRT_outputs/selected_scales/", blocks=sp_block_select, save.points.shp = F)  
+end_time<-Sys.time()
+end_time-start_time
 
-# reordering varimp according to variable name (without Gauss filer) and relative influence
-varimp$ordervar<-gsub("_Gauss500","",varimp$var)
-varimp$ordervar<-gsub("_Gauss250","",varimp$ordervar)
-varimp[order(varimp$ordervar,-varimp$rel.inf),]
+# Cell level (250m, no Gaussian filter) ####
+
+pred.variables3<-c( 
+  "Species_Abie_Bal_v1",
+  #"Species_Abie_Bal_v1_Gauss250",
+  #"Species_Abie_Bal_v1_Gauss750",
+  "Species_Betu_Pap_v1",
+  #"Species_Betu_Pap_v1_Gauss250",
+  #"Species_Betu_Pap_v1_Gauss750",
+  "Species_Lari_Lar_v1",
+  #"Species_Lari_Lar_v1_Gauss250",
+  #"Species_Lari_Lar_v1_Gauss750",
+  "Species_Pice_Gla_v1",
+  #"Species_Pice_Gla_v1_Gauss250",
+  #"Species_Pice_Gla_v1_Gauss750",
+  "Species_Pice_Mar_v1",
+  #"Species_Pice_Mar_v1_Gauss250",
+  #"Species_Pice_Mar_v1_Gauss750",
+  "Species_Pinu_Ban_v1",
+  #"Species_Pinu_Ban_v1_Gauss250",
+  #"Species_Pinu_Ban_v1_Gauss750",
+  "Species_Pinu_Con_v1",
+  #"Species_Pinu_Con_v1_Gauss250",
+  #"Species_Pinu_Con_v1_Gauss750",
+  "Species_Popu_Bal_v1",
+  #"Species_Popu_Bal_v1_Gauss250",
+  #"Species_Popu_Bal_v1_Gauss750",
+  "Species_Popu_Tre_v1",
+  #"Species_Popu_Tre_v1_Gauss250",
+  #"Species_Popu_Tre_v1_Gauss750",
+  "Species_Pseu_Men_v1",
+  #"Species_Pseu_Men_v1_Gauss250",
+  #"Species_Pseu_Men_v1_Gauss750",
+  "Species_Thuj_Pli_v1",
+  #"Species_Thuj_Pli_v1_Gauss250",
+  #"Species_Thuj_Pli_v1_Gauss750",
+  "Species_Tsug_Het_v1",
+  #"Species_Tsug_Het_v1_Gauss250",
+  #"Species_Tsug_Het_v1_Gauss750",
+  "Structure_Biomass_TotalLiveAboveGround_v1",
+  #"Structure_Biomass_TotalLiveAboveGround_v1_Gauss250",
+  #"Structure_Biomass_TotalLiveAboveGround_v1_Gauss750",
+  "Structure_Stand_Age_v1",
+  #"Structure_Stand_Age_v1_Gauss250",
+  #"Structure_Stand_Age_v1_Gauss750",
+  "cti250",
+  #"cti250_Gauss250",
+  #"cti250_Gauss750",
+  "CultivationCrop",
+  "IndustrialSiteRural",
+  "MineSite",
+  "Pipeline",
+  "RoadHardSurface",
+  "SeismicLineNarrow",
+  "SeismicLineWide",
+  "TransmissionLine",
+  "AHM",
+  "DD18",
+  "MAT",
+  "MAP",
+  "FFP",
+  "MWMT",
+  "MCMT"
+)
+
+# create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, HF, etc).
+ind3 <- which(names(pred_abs_2011) %in% pred.variables3[-c(24:30)])
+
+# Calculate autocorrelation range
+start_time <- Sys.time()
+sp.auto.arr3 <- spatialAutoRange(pred_abs_2011[[ind3]])
+end_time <- Sys.time()
+end_time - start_time
+
+# Use spatial blocks to separate train and test folds
+start_time <- Sys.time()
+set.seed(123)
+sp_block_cell <- spatialBlock(
+  speciesData = datcombo_sp,
+  species = "OCCU",
+  rasterLayer = pred_abs_2011[[1]],
+  iteration = 250,
+  theRange = sp.auto.arr3$range,
+  selection = "random",
+  maskBySpecies = FALSE
+)
+end_time <- Sys.time()
+end_time - start_time
 
 
+start_time<-Sys.time()
+brt3<- brt_blocks(data=datcombo,pred.variables = pred.variables3, output.folder = "D://CHID regional Alberta BRT/BRT_outputs/cell_level/", blocks=sp_block_cell, save.points.shp = F)  
+end_time<-Sys.time()
+end_time-start_time
+# Only Gaussian filter with sigma = 250m ####
+pred.variables4<-c( 
+  #"Species_Abie_Bal_v1",
+  "Species_Abie_Bal_v1_Gauss250",
+  #"Species_Abie_Bal_v1_Gauss750",
+  #"Species_Betu_Pap_v1",
+  "Species_Betu_Pap_v1_Gauss250",
+  #"Species_Betu_Pap_v1_Gauss750",
+  #"Species_Lari_Lar_v1",
+  "Species_Lari_Lar_v1_Gauss250",
+  #"Species_Lari_Lar_v1_Gauss750",
+  #"Species_Pice_Gla_v1",
+  "Species_Pice_Gla_v1_Gauss250",
+  #"Species_Pice_Gla_v1_Gauss750",
+  #"Species_Pice_Mar_v1",
+  "Species_Pice_Mar_v1_Gauss250",
+  #"Species_Pice_Mar_v1_Gauss750",
+  #"Species_Pinu_Ban_v1",
+  "Species_Pinu_Ban_v1_Gauss250",
+  #"Species_Pinu_Ban_v1_Gauss750",
+  #"Species_Pinu_Con_v1",
+  "Species_Pinu_Con_v1_Gauss250",
+  #"Species_Pinu_Con_v1_Gauss750",
+  #"Species_Popu_Bal_v1",
+  "Species_Popu_Bal_v1_Gauss250",
+  #"Species_Popu_Bal_v1_Gauss750",
+  #"Species_Popu_Tre_v1",
+  "Species_Popu_Tre_v1_Gauss250",
+  #"Species_Popu_Tre_v1_Gauss750",
+  #"Species_Pseu_Men_v1",
+  "Species_Pseu_Men_v1_Gauss250",
+  #"Species_Pseu_Men_v1_Gauss750",
+  #"Species_Thuj_Pli_v1",
+  "Species_Thuj_Pli_v1_Gauss250",
+  #"Species_Thuj_Pli_v1_Gauss750",
+  #"Species_Tsug_Het_v1",
+  "Species_Tsug_Het_v1_Gauss250",
+  #"Species_Tsug_Het_v1_Gauss750",
+  #"Structure_Biomass_TotalLiveAboveGround_v1",
+  "Structure_Biomass_TotalLiveAboveGround_v1_Gauss250",
+  #"Structure_Biomass_TotalLiveAboveGround_v1_Gauss750",
+  #"Structure_Stand_Age_v1",
+  "Structure_Stand_Age_v1_Gauss250",
+  #"Structure_Stand_Age_v1_Gauss750",
+  #"cti250",
+  "cti250_Gauss250",
+  #"cti250_Gauss750",
+  "CultivationCrop",
+  "IndustrialSiteRural",
+  "MineSite",
+  "Pipeline",
+  "RoadHardSurface",
+  "SeismicLineNarrow",
+  "SeismicLineWide",
+  "TransmissionLine",
+  "AHM",
+  "DD18",
+  "MAT",
+  "MAP",
+  "FFP",
+  "MWMT",
+  "MCMT"
+)
+
+# create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, HF, etc).
+ind4 <- which(names(pred_abs_2011) %in% pred.variables4[-c(24:30)])
+
+# Calculate autocorrelation range
+start_time <- Sys.time()
+sp.auto.arr4 <- spatialAutoRange(pred_abs_2011[[ind4]])
+end_time <- Sys.time()
+end_time - start_time
+
+# Use spatial blocks to separate train and test folds
+start_time <- Sys.time()
+set.seed(123)
+sp_block_GF250 <- spatialBlock(
+  speciesData = datcombo_sp,
+  species = "OCCU",
+  rasterLayer = pred_abs_2011[[1]],
+  iteration = 250,
+  theRange = sp.auto.arr4$range,
+  selection = "random",
+  maskBySpecies = FALSE
+)
+end_time <- Sys.time()
+end_time - start_time
 
 
+start_time<-Sys.time()
+brt4<- brt_blocks(data=datcombo,pred.variables = pred.variables4, output.folder = "D://CHID regional Alberta BRT/BRT_outputs/GFsigma250m/", blocks=sp_block_GF250, save.points.shp = F)  
+end_time<-Sys.time()
+end_time-start_time
 
-# Assessing sampling representativeness ### OUTDATED!!!
+# Only Gaussian filter with sigma = 750m ####
+pred.variables5<-c( 
+  #"Species_Abie_Bal_v1",
+  #"Species_Abie_Bal_v1_Gauss250",
+  "Species_Abie_Bal_v1_Gauss750",
+  #"Species_Betu_Pap_v1",
+  #"Species_Betu_Pap_v1_Gauss250",
+  "Species_Betu_Pap_v1_Gauss750",
+  #"Species_Lari_Lar_v1",
+  #"Species_Lari_Lar_v1_Gauss250",
+  "Species_Lari_Lar_v1_Gauss750",
+  #"Species_Pice_Gla_v1",
+  #"Species_Pice_Gla_v1_Gauss250",
+  "Species_Pice_Gla_v1_Gauss750",
+  #"Species_Pice_Mar_v1",
+  #"Species_Pice_Mar_v1_Gauss250",
+  "Species_Pice_Mar_v1_Gauss750",
+  #"Species_Pinu_Ban_v1",
+  #"Species_Pinu_Ban_v1_Gauss250",
+  "Species_Pinu_Ban_v1_Gauss750",
+  #"Species_Pinu_Con_v1",
+  #"Species_Pinu_Con_v1_Gauss250",
+  "Species_Pinu_Con_v1_Gauss750",
+  #"Species_Popu_Bal_v1",
+  #"Species_Popu_Bal_v1_Gauss250",
+  "Species_Popu_Bal_v1_Gauss750",
+  #"Species_Popu_Tre_v1",
+  #"Species_Popu_Tre_v1_Gauss250",
+  "Species_Popu_Tre_v1_Gauss750",
+  #"Species_Pseu_Men_v1",
+  #"Species_Pseu_Men_v1_Gauss250",
+  "Species_Pseu_Men_v1_Gauss750",
+  #"Species_Thuj_Pli_v1",
+  #"Species_Thuj_Pli_v1_Gauss250",
+  "Species_Thuj_Pli_v1_Gauss750",
+  #"Species_Tsug_Het_v1",
+  #"Species_Tsug_Het_v1_Gauss250",
+  "Species_Tsug_Het_v1_Gauss750",
+  #"Structure_Biomass_TotalLiveAboveGround_v1",
+  #"Structure_Biomass_TotalLiveAboveGround_v1_Gauss250",
+  "Structure_Biomass_TotalLiveAboveGround_v1_Gauss750",
+  #"Structure_Stand_Age_v1",
+  #"Structure_Stand_Age_v1_Gauss250",
+  "Structure_Stand_Age_v1_Gauss750",
+  #"cti250",
+  #"cti250_Gauss250",
+  "cti250_Gauss750",
+  "CultivationCrop",
+  "IndustrialSiteRural",
+  "MineSite",
+  "Pipeline",
+  "RoadHardSurface",
+  "SeismicLineNarrow",
+  "SeismicLineWide",
+  "TransmissionLine",
+  "AHM",
+  "DD18",
+  "MAT",
+  "MAP",
+  "FFP",
+  "MWMT",
+  "MCMT"
+)
+
+# create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, HF, etc).
+ind5 <- which(names(pred_abs_2011) %in% pred.variables5[-c(XX:YY)])
+
+# Calculate autocorrelation range
+start_time <- Sys.time()
+sp.auto.arr5 <- spatialAutoRange(pred_abs_2011[[ind5]])
+end_time <- Sys.time()
+end_time - start_time
+
+# Use spatial blocks to separate train and test folds
+start_time <- Sys.time()
+set.seed(seed)
+sp_block_GF750 <- spatialBlock(
+  speciesData = datcombo_sp,
+  species = "OCCU",
+  rasterLayer = pred_abs_2011[[1]],
+  iteration = 250,
+  theRange = sp.auto.arr5$range,
+  selection = "random",
+  maskBySpecies = FALSE
+)
+end_time <- Sys.time()
+end_time - start_time
+
+
+start_time<-Sys.time()
+brt5<- brt_blocks(data=datcombo,pred.variables = pred.variables5, output.folder = "D://CHID regional Alberta BRT/BRT_outputs/GFsigma750m/", blocks=sp_block_GF750, save.points.shp = F)  
+end_time<-Sys.time()
+end_time-start_time
+
+# Plotting deviance for each brt model ####
+dev_plot<-function(brt){
+  m<-brt[[1]]
+  y.bar <- min(m$cv.values) 
+  y.min <- min(m$cv.values - m$cv.loss.ses)
+  y.max <- max(m$cv.values + m$cv.loss.ses)
+  
+  plot(m$trees.fitted, m$cv.values, type = 'l', ylab = "Holdout deviance", xlab = "no. of trees", ylim = c(y.min,y.max))
+  abline(h = y.bar, col = 3)
+  
+  lines(m$trees.fitted, m$cv.values + m$cv.loss.ses, lty=2)  
+  lines(m$trees.fitted, m$cv.values - m$cv.loss.ses, lty=2)  
+  
+  target.trees <- m$trees.fitted[match(TRUE,m$cv.values == y.bar)]
+  abline(v = target.trees, col=4)
+}
+
+dev_plot(brt2)
+
+
+# Assessing sampling representativeness ### OUTDATED!!! ####
 load("D:/CHID regional Alberta BRT/BRT_outputs/model1/CAWAbrtAB.R") # load example brt
 brt1$var.names
 mess1<-mess(abs2011_1km[[brt1$var.names]], extract(abs2011_1km[[brt1$var.names]],cbind(datcombo$X,datcombo$Y)))
@@ -271,7 +662,7 @@ writeRaster(mess1, filename="mess_brt_preds.tif", format="GTiff",overwrite=TRUE)
 
 
 
-# mean and coefficient of variation among the 20 brt models ### OUTDATED!!!
+# mean and coefficient of variation among the 20 brt models ### OUTDATED!!! ####
 load("D:/CHID regional Alberta BRT/BRT_outputs/model1/CAWAbrtAB.R")
 brt_preds<-stack(raster("D:/CHID regional Alberta BRT/BRT_outputs/model1/CAWA_pred1km.tif"))
 names(brt_preds)<-"model1"
