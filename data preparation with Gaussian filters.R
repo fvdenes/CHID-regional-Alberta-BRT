@@ -32,110 +32,95 @@ alberta<-projectRaster(alberta,crs=LCC)
 plot(alberta)
 
 # Load Beaudoin layers (2011 and 2001), crop and mask for AB, save as rasters
-# b2011 <- list.files("D:/Beaudoin/2011/Processed/sppBiomass_Canada",pattern="tif$")
-# setwd("D:/Beaudoin/2011/")
-# bs2011 <- stack(raster(b2011[1]))
-# for (i in 2:length(b2011)) { bs2011 <- addLayer(bs2011, raster(b2011[i]))}
-# names(bs2011) <- gsub("NFI_MODIS250m_2011_kNN_","",names(bs2011))
-# abs2011 <- crop(bs2011,alberta)
-# abs2011 <- mask(abs2011,alberta)
-# writeRaster(abs2011, filename="D:/Beaudoin/2011/Processed/AB/abs2011_250m.grd", format="raster",overwrite=TRUE)
+b2011 <- list.files("D:/Beaudoin/2011/Processed/sppBiomass_Canada",pattern="tif$")
+setwd("D:/Beaudoin/2011/")
+bs2011 <- stack(raster(b2011[1]))
+for (i in 2:length(b2011)) { bs2011 <- addLayer(bs2011, raster(b2011[i]))}
+names(bs2011) <- gsub("NFI_MODIS250m_2011_kNN_","",names(bs2011))
+abs2011 <- crop(bs2011,alberta)
+abs2011 <- mask(abs2011,alberta)
+writeRaster(abs2011, filename="D:/Beaudoin/2011/Processed/AB/abs2011_250m.grd", format="raster",overwrite=TRUE)
 abs2011<-stack("D:/Beaudoin/2011/Processed/AB/abs2011_250m.grd")
 
-# b2001 <- list.files("D:/Beaudoin/2001/Processed/sppBiomass_Canada",pattern="tif$")
-# setwd("D:/Beaudoin/2001/")
-# bs2001 <- stack(raster(b2001[1]))
-# for (i in 2:length(b2001)) { bs2001 <- addLayer(bs2001, raster(b2001[i]))}
-# names(bs2001) <- gsub("NFI_MODIS250m_2001_kNN_","",names(bs2001))
-# abs2001 <- crop(bs2001,alberta)
-# abs2001<-mask(abs2001,alberta)
-# writeRaster(abs2001, filename="D:/Beaudoin/2001/Processed/AB/abs2001_250m.grd", format="raster",overwrite=TRUE)
+b2001 <- list.files("D:/Beaudoin/2001/Processed/sppBiomass_Canada",pattern="tif$")
+setwd("D:/Beaudoin/2001/")
+bs2001 <- stack(raster(b2001[1]))
+for (i in 2:length(b2001)) { bs2001 <- addLayer(bs2001, raster(b2001[i]))}
+names(bs2001) <- gsub("NFI_MODIS250m_2001_kNN_","",names(bs2001))
+abs2001 <- crop(bs2001,alberta)
+abs2001<-mask(abs2001,alberta)
+writeRaster(abs2001, filename="D:/Beaudoin/2001/Processed/AB/abs2001_250m.grd", format="raster",overwrite=TRUE)
 abs2001<-stack("D:/Beaudoin/2001/Processed/AB/abs2001_250m.grd")
 
-# obtain weighted sums of neighourhood cells using Gaussian filter with sigma=250, and 500m for Beaudoin and CTI layers, save outputs as rasters
-x<-seq(-4000,4000,length.out=100)
-y1<-dnorm(x,0,sd=250)
-plot(x, y1, type="l", lty=1, xlab="x value",
-     ylab="Density", main="Gaussian filter shapes")
-abline(v=-125,lty=2)
-abline(v=125,lty=2)
-abline(v=-1000,lty=2,col=2)
-abline(v=1000,lty=2,col=2)
-lines(x, dnorm(x,0,500), lwd=1, col="blue")
-lines(x, dnorm(x,0,750), lwd=1, col="green")
-lines(x, dnorm(x,0,1000), lwd=1, col="red")
-lines(x, dnorm(x,0,1500), lwd=1, col="gold")
-legend("topright", inset=.05,  legend=c("sigma=250m","sigma=500m","sigma=750m","sigma=1000m","sigma=1500m","250m cell", "1000m buffer"), lwd=1, lty=c(1, 1,1,1,1, 2, 2), col=c(1,4,3,2,"gold",1,2))
+# obtain weighted sums of neighourhood cells using Gaussian filter with sigma=250, and 750m for Beaudoin and CTI layers, save outputs as rasters
 
 #Beaudoin 2011
 ## sigma = 250m
 fw250<-focalWeight(x=abs2011,d=250,type="Gauss")
-# abs2011_Gauss250<-stack(focal(abs2011[[1]],w=fw250,na.rm=TRUE))
-# names(abs2011_Gauss250)<-names(abs2011)[[1]]
-# for(i in 2:nlayers(abs2011)){
-#   abs2011_Gauss250<-addLayer(abs2011_Gauss250,focal(abs2011[[i]],w=fw250,na.rm=TRUE))
-#   names(abs2011_Gauss250)[i]<-names(abs2011)[[i]]
-# }
-# abs2011_Gauss250<-brick(abs2011_Gauss250)
-# writeRaster(abs2011_Gauss250, filename="D:/Beaudoin/2011/Processed/AB/abs2011_250_Gauss250m.grd", format="raster",overwrite=TRUE)
-abs2011_Gauss250<-brick("D:/Beaudoin/2011/Processed/AB/abs2011_250_Gauss250m.grd")
+abs2011_Gauss250<-stack(focal(abs2011[[1]],w=fw250,na.rm=TRUE))
+names(abs2011_Gauss250)<-names(abs2011)[[1]]
+for(i in 2:nlayers(abs2011)){
+ abs2011_Gauss250<-addLayer(abs2011_Gauss250,focal(abs2011[[i]],w=fw250,na.rm=TRUE))
+ names(abs2011_Gauss250)[i]<-names(abs2011)[[i]]
+}
+abs2011_Gauss250<-brick(abs2011_Gauss250)
+writeRaster(abs2011_Gauss250, filename="D:/Beaudoin/2011/Processed/AB/abs2011_250_Gauss250m.grd", format="raster",overwrite=TRUE)
+#abs2011_Gauss250<-brick("D:/Beaudoin/2011/Processed/AB/abs2011_250_Gauss250m.grd")
 
 ## sigma = 750m
-# fw750<-focalWeight(x=abs2011,d=1000,type="Gauss")
-# abs2011_Gauss750<-brick(focal(abs2011[[1]],w=fw750,na.rm=TRUE))
-# names(abs2011_Gauss750)<-names(abs2011)[[1]]
-# for(i in 2:nlayers(abs2011)){
-#   abs2011_Gauss750<-addLayer(abs2011_Gauss750,focal(abs2011[[i]],w=fw750,na.rm=TRUE))
-#   names(abs2011_Gauss750)[i]<-names(abs2011)[[i]]
-# }
-# abs2011_Gauss750<-brick(abs2011_Gauss750)
-# writeRaster(abs2011_Gauss750, filename="D:/Beaudoin/2011/Processed/AB/abs2011_250_Gauss750m.grd", format="raster",overwrite=TRUE)
-abs2011_Gauss750<-brick("D:/Beaudoin/2011/Processed/AB/abs2011_250_Gauss750m.grd")
+fw750<-focalWeight(x=abs2011,d=750,type="Gauss")
+abs2011_Gauss750<-brick(focal(abs2011[[1]],w=fw750,na.rm=TRUE))
+names(abs2011_Gauss750)<-names(abs2011)[[1]]
+for(i in 2:nlayers(abs2011)){
+ abs2011_Gauss750<-addLayer(abs2011_Gauss750,focal(abs2011[[i]],w=fw750,na.rm=TRUE))
+ names(abs2011_Gauss750)[i]<-names(abs2011)[[i]]
+}
+abs2011_Gauss750<-brick(abs2011_Gauss750)
+writeRaster(abs2011_Gauss750, filename="D:/Beaudoin/2011/Processed/AB/abs2011_250_Gauss750m.grd", format="raster",overwrite=TRUE)
+#abs2011_Gauss750<-brick("D:/Beaudoin/2011/Processed/AB/abs2011_250_Gauss750m.grd")
 
 
 #Beaudoin 2001
 ## sigma = 250m
-#fw250<-focalWeight(x=abs2001,d=250,type="Gauss")
-# abs2001_Gauss250<-stack(focal(abs2001[[1]],w=fw250,na.rm=TRUE))
-# names(abs2001_Gauss250)<-names(abs2001)[[1]]
-# for(i in 2:nlayers(abs2001)){
-#   abs2001_Gauss250<-addLayer(abs2001_Gauss250,focal(abs2001[[i]],w=fw250,na.rm=TRUE))
-#   names(abs2001_Gauss250)[i]<-names(abs2001)[[i]]
-# }
-# abs2001_Gauss250<-brick(abs2001_Gauss250)
-# writeRaster(abs2001_Gauss250, filename="D:/Beaudoin/2001/Processed/AB/abs2001_250_Gauss250m.grd", format="raster",overwrite=TRUE)
-abs2001_Gauss250<-brick("D:/Beaudoin/2001/Processed/AB/abs2001_250_Gauss250m.grd")
+abs2001_Gauss250<-stack(focal(abs2001[[1]],w=fw250,na.rm=TRUE))
+names(abs2001_Gauss250)<-names(abs2001)[[1]]
+for(i in 2:nlayers(abs2001)){
+ abs2001_Gauss250<-addLayer(abs2001_Gauss250,focal(abs2001[[i]],w=fw250,na.rm=TRUE))
+ names(abs2001_Gauss250)[i]<-names(abs2001)[[i]]
+}
+abs2001_Gauss250<-brick(abs2001_Gauss250)
+writeRaster(abs2001_Gauss250, filename="D:/Beaudoin/2001/Processed/AB/abs2001_250_Gauss250m.grd", format="raster",overwrite=TRUE)
+#abs2001_Gauss250<-brick("D:/Beaudoin/2001/Processed/AB/abs2001_250_Gauss250m.grd")
 
 
 # ## sigma = 750m
-# fw750<-focalWeight(x=abs2001,d=1000,type="Gauss")
-# abs2001_Gauss750<-brick(focal(abs2001[[1]],w=fw750,na.rm=TRUE))
-# names(abs2001_Gauss750)<-names(abs2001)[[1]]
-# for(i in 2:nlayers(abs2001)){
-#   abs2001_Gauss750<-addLayer(abs2001_Gauss750,focal(abs2001[[i]],w=fw750,na.rm=TRUE))
-#   names(abs2001_Gauss750)[i]<-names(abs2001)[[i]]
-# }
-# abs2001_Gauss750<-brick(abs2001_Gauss750)
-# writeRaster(abs2001_Gauss750, filename="D:/Beaudoin/2001/Processed/AB/abs2001_250_Gauss750m.grd", format="raster",overwrite=TRUE)
-abs2001_Gauss750<-brick("D:/Beaudoin/2001/Processed/AB/abs2001_250_Gauss750m.grd")
+abs2001_Gauss750<-brick(focal(abs2001[[1]],w=fw750,na.rm=TRUE))
+names(abs2001_Gauss750)<-names(abs2001)[[1]]
+for(i in 2:nlayers(abs2001)){
+ abs2001_Gauss750<-addLayer(abs2001_Gauss750,focal(abs2001[[i]],w=fw750,na.rm=TRUE))
+ names(abs2001_Gauss750)[i]<-names(abs2001)[[i]]
+}
+abs2001_Gauss750<-brick(abs2001_Gauss750)
+writeRaster(abs2001_Gauss750, filename="D:/Beaudoin/2001/Processed/AB/abs2001_250_Gauss750m.grd", format="raster",overwrite=TRUE)
+#abs2001_Gauss750<-brick("D:/Beaudoin/2001/Processed/AB/abs2001_250_Gauss750m.grd")
 
 # cti data
-# cti100<-raster("D:/ABTerrainNielsen/100-m/cti.asc")
-# cti100<-projectRaster(cti100,crs=LCC)
-# cti250<-resample(cti100,alberta)
-# writeRaster(cti250, filename="D:/ABTerrainNielsen/250-m/cti.asc", format="ascii",overwrite=TRUE)
-cti250<-raster("D:/ABTerrainNielsen/250-m/cti.asc")
+cti100<-raster("D:/ABTerrainNielsen/100-m/cti.asc")
+cti100<-projectRaster(cti100,crs=LCC)
+cti250<-resample(cti100,alberta)
+writeRaster(cti250, filename="D:/ABTerrainNielsen/250-m/cti.asc", format="ascii",overwrite=TRUE)
+#cti250<-raster("D:/ABTerrainNielsen/250-m/cti.asc")
 
-# cti250_Gauss250<-focal(cti250,w=fw250,na.rm=TRUE)
-# cti250_Gauss750<-focal(cti250,w=fw750,na.rm=TRUE)
+cti250_Gauss250<-focal(cti250,w=fw250,na.rm=TRUE)
+cti250_Gauss750<-focal(cti250,w=fw750,na.rm=TRUE)
 
-# writeRaster(cti250_Gauss250, filename="D:/ABTerrainNielsen/250-m/Processed/cti250_Gauss250m.asc", format="ascii",overwrite=TRUE)
-# writeRaster(cti250_Gauss750, filename="D:/ABTerrainNielsen/250-m/Processed/cti250_Gauss750m.asc", format="ascii",overwrite=TRUE)
+writeRaster(cti250_Gauss250, filename="D:/ABTerrainNielsen/250-m/Processed/cti250_Gauss250m.asc", format="ascii",overwrite=TRUE)
+writeRaster(cti250_Gauss750, filename="D:/ABTerrainNielsen/250-m/Processed/cti250_Gauss750m.asc", format="ascii",overwrite=TRUE)
 
-cti250_Gauss250<-raster("D:/ABTerrainNielsen/250-m/Processed/cti250_Gauss250m.asc")
-cti250_Gauss750<-raster("D:/ABTerrainNielsen/250-m/Processed/cti250_Gauss750m.asc")
+#cti250_Gauss250<-raster("D:/ABTerrainNielsen/250-m/Processed/cti250_Gauss250m.asc")
+#cti250_Gauss750<-raster("D:/ABTerrainNielsen/250-m/Processed/cti250_Gauss750m.asc")
 
-#rm(cti100)
+rm(cti100)
 gc()
 
 # Human Footprint data- upload and resample to 250m resolution to match other layers, and attach to abs2011
@@ -148,18 +133,27 @@ for(i in 1:length(HF)){
   names(abs2011)[nlayers(abs2011)] <- gsub("_AB_1km","",names(HFlayer))
 }
 
+
+# water and "lake edge density"
+wat <- raster("D:/wat2011_lcc1/wat2011_lcc1.tif")
+watAB<- crop(wat,alberta)
+watAB<- mask(watAB,abs2011[[1]])
+
+watAB_Gauss250<-focal(watAB,w=fw250,na.rm=TRUE)
+watAB_Gauss750<-focal(watAB,w=fw750,na.rm=TRUE)
+
 # climate data- upload and resample to 250m resolution to match other layers, and attach to abs2011
-# climateAW2010 <- list.files("D:/ClimateAdaptWest/baseline19812010/",pattern="asc$")
-# setwd("D:/ClimateAdaptWest/baseline19812010/")
-# clim2010 <- stack(raster(climateAW2010[1]))
-# for (i in 2:length(climateAW2010)) { clim2010 <- addLayer(clim2010, raster(climateAW2010[i]))}
-# proj4string(clim2010)<-LCC
-# aclim2010 <- crop(clim2010,abs2011)
-# aclim2010<-resample(clim2010,abs2011)
-# aclim2010<-mask(aclim2010,abs2011$LandCover_NonVeg_v1)
-# 
-# writeRaster(aclim2010, filename="D:/ClimateAdaptWest/baseline19812010/Processed/AB/aclim2010.grd", format="raster",overwrite=TRUE)
-aclim2010<-stack("D:/ClimateAdaptWest/baseline19812010/Processed/AB/aclim2010.grd")
+climateAW2010 <- list.files("D:/ClimateAdaptWest/baseline19812010/",pattern="asc$")
+setwd("D:/ClimateAdaptWest/baseline19812010/")
+clim2010 <- stack(raster(climateAW2010[1]))
+for (i in 2:length(climateAW2010)) { clim2010 <- addLayer(clim2010, raster(climateAW2010[i]))}
+proj4string(clim2010)<-LCC
+aclim2010 <- crop(clim2010,abs2011)
+aclim2010<-resample(clim2010,abs2011)
+aclim2010<-mask(aclim2010,abs2011$LandCover_NonVeg_v1)
+ 
+writeRaster(aclim2010, filename="D:/ClimateAdaptWest/baseline19812010/Processed/AB/aclim2010.grd", format="raster",overwrite=TRUE)
+#aclim2010<-stack("D:/ClimateAdaptWest/baseline19812010/Processed/AB/aclim2010.grd")
 
 for(i in 1:length(names(aclim2010))){ 
   abs2011 <- addLayer(abs2011, aclim2010[[i]])
@@ -179,9 +173,12 @@ names(cti250) <- "cti250"
 names(cti250_Gauss250) <- "cti250_Gauss250"
 names(cti250_Gauss750) <- "cti250_Gauss750"
 
+names(watAB) <- "watAB"
+names(watAB_Gauss250) <- "watAB_Gauss250"
+names(watAB_Gauss750) <- "watAB_Gauss750"
 
-pred_abs_2011<-stack(abs2011,abs2011_Gauss250,abs2011_Gauss750,cti250,cti250_Gauss250,cti250_Gauss750,quick=TRUE)
-writeRaster(abs2011, filename="D:/CHID regional Alberta BRT/prediction dataset/abs2011_250m.grd", format="raster",overwrite=TRUE)
+pred_abs_2011<-stack(abs2011,abs2011_Gauss250,abs2011_Gauss750,cti250,cti250_Gauss250,cti250_Gauss750,watAB, watAB_Gauss250, watAB_Gauss750,quick=TRUE)
+writeRaster(pred_abs_2011, filename="D:/CHID regional Alberta BRT/prediction dataset/abs2011_250m.grd", format="raster",overwrite=TRUE)
 
 
 # Extracting data from rasters for surveyed locations (ABSS)
@@ -206,6 +203,15 @@ names(dat2011)[ncol(dat2011)] <- "cti250_Gauss250"
 
 dat2011<-cbind(dat2011,extract(cti250_Gauss750,as.matrix(cbind(dat2011$X,dat2011$Y)))) # includes cti 250m resolution data, Gaussian filter sigma=750m
 names(dat2011)[ncol(dat2011)] <- "cti250_Gauss750"
+
+dat2011<-cbind(dat2011,extract(watAB,as.matrix(cbind(dat2011$X,dat2011$Y)))) # includes wat 250m resolution data
+names(dat2011)[ncol(dat2011)] <- "watAB"
+
+dat2011<-cbind(dat2011,extract(watAB_Gauss250,as.matrix(cbind(dat2011$X,dat2011$Y)))) # includes wat 250m resolution data, Gaussian filter sigma=250m
+names(dat2011)[ncol(dat2011)] <- "watAB_Gauss250"
+
+dat2011<-cbind(dat2011,extract(watAB_Gauss750,as.matrix(cbind(dat2011$X,dat2011$Y)))) # includes wat 250m resolution data, Gaussian filter sigma=750m
+names(dat2011)[ncol(dat2011)] <- "watAB_Gauss750"
 
 dat2011 <-cbind(dat2011,extract(eco,as.matrix(cbind(dat2011$X,dat2011$Y)))) # includes ecoregions layer
 names(dat2011)[ncol(dat2011)] <- "eco"
@@ -253,6 +259,15 @@ names(dat2001)[ncol(dat2001)] <- "cti250_Gauss250"
 dat2001<-cbind(dat2001,extract(cti250_Gauss750,as.matrix(cbind(dat2001$X,dat2001$Y)))) # includes cti 250m resolution data, Gaussian filter sigma=750m
 names(dat2001)[ncol(dat2001)] <- "cti250_Gauss750"
 
+dat2001<-cbind(dat2001,extract(watAB,as.matrix(cbind(dat2001$X,dat2001$Y)))) # includes wat 250m resolution data
+names(dat2001)[ncol(dat2001)] <- "watAB"
+
+dat2001<-cbind(dat2001,extract(watAB_Gauss250,as.matrix(cbind(dat2001$X,dat2001$Y)))) # includes wat 250m resolution data, Gaussian filter sigma=250m
+names(dat2001)[ncol(dat2001)] <- "watAB_Gauss250"
+
+dat2001<-cbind(dat2001,extract(watAB_Gauss750,as.matrix(cbind(dat2001$X,dat2001$Y)))) # includes wat 250m resolution data, Gaussian filter sigma=750m
+names(dat2001)[ncol(dat2001)] <- "watAB_Gauss750"
+
 dat2001 <-cbind(dat2001,extract(eco,as.matrix(cbind(dat2001$X,dat2001$Y)))) # includes ecoregions layer
 names(dat2001)[ncol(dat2001)] <- "eco"
 
@@ -270,6 +285,7 @@ write.csv(dat2001,"ABdat2001.csv")
 
 
 # Prepare point count data for each SS and aggregate for 2001 and 2011.
+
 
 PC <- inner_join(PCTBL,PKEY[,1:8],by=c("PKEY","SS"))[,-1]
 colnames(PC)[10]<-"PCODE"

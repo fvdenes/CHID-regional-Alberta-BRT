@@ -33,7 +33,7 @@ brt_blocks <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222,
   }
   
   x1 <-
-    try(brt1 <-
+    try(brt <-
           gbm.step(
             datcombo,
             gbm.y = "ABUND",
@@ -50,6 +50,50 @@ brt_blocks <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222,
             keep.fold.fit = T
           ))
   
+  if(class(x1)=="NULL"){#retry models that didn't converge with smaller learning rate
+    x1 <-
+      try(brt <-
+            gbm.step(
+              datcombo,
+              gbm.y = "ABUND",
+              gbm.x = pred.variables,
+              fold.vector = folds,
+              n.folds = n.folds,
+              family = "poisson",
+              tree.complexity = tc,
+              learning.rate = lr/10,
+              bag.fraction = bf,
+              offset = datcombo$logoffset,
+              site.weights = datcombo$wt,
+              keep.fold.models = T,
+              keep.fold.fit = T
+            ))
+  }
+  
+  if(class(x1)=="NULL"){#retry models that didn't converge with smaller learning rate
+    x1 <-
+      try(brt <-
+            gbm.step(
+              datcombo,
+              gbm.y = "ABUND",
+              gbm.x = pred.variables,
+              fold.vector = folds,
+              n.folds = n.folds,
+              family = "poisson",
+              tree.complexity = tc,
+              learning.rate = lr/100,
+              bag.fraction = bf,
+              offset = datcombo$logoffset,
+              site.weights = datcombo$wt,
+              keep.fold.models = T,
+              keep.fold.fit = T
+            ))
+  }
+  
+  if(class(x1)=="NULL"){
+    stop("Restart model with even smaller learning rate, or other predictors!")
+  }
+  
   # Define/create folders for storing outputs
   if (class(x1) != "try-error") {
     z <- output.folder
@@ -59,25 +103,25 @@ brt_blocks <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222,
     }
     
     if (is.null(blocks)){
-      save(brt1, file = paste(z, speclist[j], "brtAB.R", sep = ""))
+      save(brt, file = paste(z, speclist[j], "brtAB.R", sep = ""))
     }
     
     else {
       save(blocks, file = paste(z, speclist[j], "blocks", sep = ""))
-      save(brt1, file = paste(z, speclist[j], "brtAB.R", sep = ""))
+      save(brt, file = paste(z, speclist[j], "brtAB.R", sep = ""))
     }  
     
     
     ## Model evaluation
-    varimp <- as.data.frame(brt1$contributions)
+    varimp <- as.data.frame(brt$contributions)
     write.csv(varimp, file = paste(z, speclist[j], "varimp.csv", sep = ""))
-    cvstats <- t(as.data.frame(brt1$cv.statistics))
+    cvstats <- t(as.data.frame(brt$cv.statistics))
     write.csv(cvstats, file = paste(z, speclist[j], "cvstats.csv", sep =
                                       ""))
     pdf(paste(z, speclist[j], "_plot.pdf", sep = ""))
     gbm.plot(
-      brt1,
-      n.plots = 32,
+      brt,
+      n.plots = length(pred.variables),
       smooth = TRUE,
       plot.layout = c(3, 3),
       common.scale = T
@@ -85,8 +129,8 @@ brt_blocks <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222,
     dev.off()
     pdf(paste(z, speclist[j], "_plot.var-scale.pdf", sep = ""))
     gbm.plot(
-      brt1,
-      n.plots = 32,
+      brt,
+      n.plots = length(pred.variables),
       smooth = TRUE,
       plot.layout = c(3, 3),
       common.scale = F,
@@ -99,9 +143,9 @@ brt_blocks <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222,
     
     rast <-
       predict(pred.stack,
-              brt1,
+              brt,
               type = "response",
-              n.trees = brt1$n.trees)
+              n.trees = brt$n.trees)
     writeRaster(
       rast,
       filename = paste(z, speclist[j], "_pred1km", sep = ""),
@@ -109,7 +153,7 @@ brt_blocks <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222,
       overwrite = TRUE
     )
     
-    data_sp <-SpatialPointsDataFrame(coords = data[, 33:34], data = data, proj4string = LCC)
+    data_sp <-SpatialPointsDataFrame(coords = data[, 34:35], data = data, proj4string = LCC)
     png(paste(z, speclist[j], "_pred1km.png", sep = ""))
     plot(rast, zlim = c(0, 1))
     points(data_sp$X, data_sp$Y, cex = 0.05)
@@ -124,27 +168,39 @@ brt_blocks <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222,
       )
     }
     
-    if(keep.out==T) {return(brt1)}
+    if(keep.out==T) {return(brt)}
   }
 }
+
 
 #load data and prepare objects ####
 load("D:/CHID regional Alberta BRT/AB_BRT_Rproject/data_pack.RData")
 
+pred_abs_2011<-brick("D:/CHID regional Alberta BRT/prediction dataset/abs2011_250m.grd")
+
 j<-which(speclist=="CAWA") 
-specoff <- offl[offl$SPECIES==as.character(speclist[j]),]
-specdat2001 <- ABPC2001[ABPC2001$SPECIES == as.character(speclist[j]),] #n=423 for CAWA
-dat1 <- right_join(specdat2001[,c(1:4,10)],survey2001[,1:3],by=c("SS","PCODE","PKEY")) #n=31864
+
+specoff <- filter(offl, SPECIES==as.character(speclist[j]))
+specoff <- distinct(specoff)
+
+specdat2001 <- filter(ABPC2001, SPECIES == as.character(speclist[j]))
+specdat2001x <- aggregate(specdat2001$ABUND,by=list("PKEY"=specdat2001$PKEY,"SS"=specdat2001$SS), FUN=sum)
+names(specdat2001x)[3] <- "ABUND"
+dat1 <- right_join(specdat2001x,survey2001[,1:3],by=c("SS","PKEY")) #n=31864
 dat1$SPECIES <- as.character(speclist[j])
 dat1$ABUND <- as.integer(ifelse(is.na(dat1$ABUND),0,dat1$ABUND)) 
 s2001 <- left_join(dat1,specoff, by=c("SPECIES","PKEY"))
-d2001 <- left_join(s2001, dat2001, by=c("SS","PCODE")) 
-specdat2011 <- ABPC2011[ABPC2011$SPECIES == as.character(speclist[j]),] #n=989 for CAWA
-dat1 <- right_join(specdat2011[,c(1:4,10)],survey2011[,1:3],by=c("SS","PCODE","PKEY")) #n=26314
-dat1$SPECIES <- as.character(speclist[j])
-dat1$ABUND <- as.integer(ifelse(is.na(dat1$ABUND),0,dat1$ABUND)) 
-s2011 <- left_join(dat1,specoff, by=c("SPECIES","PKEY"))
-d2011 <- left_join(s2011, dat2011, by=c("SS","PCODE")) 
+d2001 <- left_join(s2001, dat2001, by=c("SS")) 
+
+specdat2011 <- filter(ABPC2011, SPECIES == as.character(speclist[j]))
+specdat2011x <- aggregate(specdat2011$ABUND,by=list("PKEY"=specdat2011$PKEY,"SS"=specdat2011$SS), FUN=sum)
+names(specdat2011x)[3] <- "ABUND"  
+dat2 <- right_join(specdat2011x,survey2011[,1:3],by=c("SS","PKEY"))
+dat2$SPECIES <- as.character(speclist[j])
+dat2$ABUND <- as.integer(ifelse(is.na(dat2$ABUND),0,dat2$ABUND)) 
+s2011 <- left_join(dat2,specoff, by=c("SPECIES","PKEY"))
+d2011 <- left_join(s2011, dat2011, by=c("SS")) 
+
 
 datcombo <- rbind(d2001,d2011)
 datcombo$eco <- as.factor(datcombo$eco)
@@ -154,6 +210,11 @@ datcombo$eco <- as.factor(datcombo$eco)
 rm(list=setdiff(ls(),c("datcombo","datcombo_sp","pred_abs_2011","w","LCC","speclist","randomCV_brt","j","blockCV_brt")))
 gc()
 
+# convert data into SpatialPointDataFrame class
+datcombo_sp <-SpatialPointsDataFrame(coords = datcombo[, 34:35], data = datcombo, proj4string = LCC)
+# create a column converting abundance to occupancy
+datcombo_sp$OCCU <- 0 
+datcombo_sp$OCCU[which(datcombo_sp$ABUND > 0)] <- 1
 
 # Full model ####
 # list variables for full model
@@ -211,24 +272,24 @@ pred.variables<-c(
   "SeismicLineNarrow",
   "SeismicLineWide",
   "TransmissionLine",
-  "AHM",
-  "DD18",
-  "MAT",
-  "MAP",
-  "FFP",
-  "MWMT",
-  "MCMT"
+  "watAB",
+  "watAB_Gauss250",
+  "watAB_Gauss750"
+  #,"AHM",
+  #"DD_0",
+  #"MAT",
+  #"MAP",
+  #"DD5",
+  #"MWMT",
+  #"MCMT"
 )
 
-# convert data into SpatialPointDataFrame class
-datcombo_sp <-SpatialPointsDataFrame(coords = datcombo[, 33:34], data = datcombo, proj4string = LCC)
 
-# create a column converting abundance to occupancy
-datcombo_sp$OCCU <- 0 
-datcombo_sp$OCCU[which(datcombo_sp$ABUND > 0)] <- 1
 
-# create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, HF, etc).
-ind <- which(names(pred_abs_2011) %in% pred.variables[-c(54:60)])
+
+
+# create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, etc).
+ind <- which(names(pred_abs_2011) %in% pred.variables[-55])
 
 # Calculate autocorrelation range
 start_time <- Sys.time()
@@ -238,7 +299,7 @@ end_time - start_time
 
 # Use spatial blocks to separate train and test folds
 start_time <- Sys.time()
-set.seed(seed)
+set.seed(123)
 sp_block_full <-  spatialBlock(
                       speciesData = datcombo_sp,
                       species = "OCCU",
@@ -312,10 +373,10 @@ pred.variables2<-c(
   "SeismicLineWide",
   "TransmissionLine",
   "AHM",
-  "DD18",
+  "DD_0",
   "MAT",
   "MAP",
-  "FFP",
+  "DD5",
   "MWMT",
   "MCMT"
 )
@@ -408,10 +469,10 @@ pred.variables3<-c(
   "SeismicLineWide",
   "TransmissionLine",
   "AHM",
-  "DD18",
+  "DD_0",
   "MAT",
   "MAP",
-  "FFP",
+  "DD5",
   "MWMT",
   "MCMT"
 )
@@ -501,10 +562,10 @@ pred.variables4<-c(
   "SeismicLineWide",
   "TransmissionLine",
   "AHM",
-  "DD18",
+  "DD_0",
   "MAT",
   "MAP",
-  "FFP",
+  "DD5",
   "MWMT",
   "MCMT"
 )
@@ -595,16 +656,16 @@ pred.variables5<-c(
   "SeismicLineWide",
   "TransmissionLine",
   "AHM",
-  "DD18",
+  "DD_0",
   "MAT",
   "MAP",
-  "FFP",
+  "DD5",
   "MWMT",
   "MCMT"
 )
 
 # create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, HF, etc).
-ind5 <- which(names(pred_abs_2011) %in% pred.variables5[-c(XX:YY)])
+ind5 <- which(names(pred_abs_2011) %in% pred.variables5[-c(24:30)])
 
 # Calculate autocorrelation range
 start_time <- Sys.time()
@@ -614,7 +675,7 @@ end_time - start_time
 
 # Use spatial blocks to separate train and test folds
 start_time <- Sys.time()
-set.seed(seed)
+set.seed(123)
 sp_block_GF750 <- spatialBlock(
   speciesData = datcombo_sp,
   species = "OCCU",
@@ -632,6 +693,81 @@ start_time<-Sys.time()
 brt5<- brt_blocks(data=datcombo,pred.variables = pred.variables5, output.folder = "D://CHID regional Alberta BRT/BRT_outputs/GFsigma750m/", blocks=sp_block_GF750, save.points.shp = F)  
 end_time<-Sys.time()
 end_time-start_time
+
+# Comparison of the different models ####
+library(ggplot2)
+
+
+# Model deviance
+brt1$cv.statistics$deviance.mean
+df<- data.frame(grp=c("Full model", "Selected scales", "cell level", "250m Gaussian smooth", "750m Gaussian smooth"),
+                deviance=c(brt1$cv.statistics$deviance.mean,
+                           brt2$cv.statistics$deviance.mean,
+                           brt3$cv.statistics$deviance.mean,
+                           brt4$cv.statistics$deviance.mean,
+                           brt5$cv.statistics$deviance.mean),
+                se=c(brt1$cv.statistics$deviance.se,
+                     brt2$cv.statistics$deviance.se,
+                     brt3$cv.statistics$deviance.se,
+                     brt4$cv.statistics$deviance.se,
+                     brt5$cv.statistics$deviance.se)
+                )
+df
+k<-ggplot(df, aes(grp,deviance,ymin=deviance-se,ymax=deviance+se))
+k+geom_pointrange()
+
+# correlation
+df2<- data.frame(grp=c("Full model", "Selected scales", "cell level", "250m Gaussian smooth", "750m Gaussian smooth"),
+                 correlation=c(brt1$cv.statistics$correlation.mean,
+                               brt2$cv.statistics$correlation.mean,
+                               brt3$cv.statistics$correlation.mean,
+                               brt4$cv.statistics$correlation.mean,
+                               brt5$cv.statistics$correlation.mean),
+                 se=c(brt1$cv.statistics$correlation.se,
+                      brt2$cv.statistics$correlation.se,
+                      brt3$cv.statistics$correlation.se,
+                      brt4$cv.statistics$correlation.se,
+                      brt5$cv.statistics$correlation.se)
+                 )
+df2
+k2<-ggplot(df2, aes(grp,correlation,ymin=correlation-se,ymax=correlation+se))
+k2+geom_pointrange()
+
+# Calibration:  The first two statistics were the estimated intercepts and slopes of linear regression models of predictions against observations. The intercept measures the magnitude and direction of bias, with values close to 0 indicating low or no bias. The slope yields information about the consistency in the bias as a function of the mean, with a value of 1 indicating a consistent bias if the intercept is a nonzero value.
+## intercept
+df3<- data.frame(grp=c("Full model", "Selected scales", "cell level", "250m Gaussian smooth", "750m Gaussian smooth"),
+                 calibration.intercept=c(brt1$cv.statistics$calibration.mean[1],
+                                         brt2$cv.statistics$calibration.mean[1],
+                                         brt3$cv.statistics$calibration.mean[1],
+                                         brt4$cv.statistics$calibration.mean[1],
+                                         brt5$cv.statistics$calibration.mean[1]),
+                 se=c(brt1$cv.statistics$calibration.se[1],
+                      brt2$cv.statistics$calibration.se[1],
+                      brt3$cv.statistics$calibration.se[1],
+                      brt4$cv.statistics$calibration.se[1],
+                      brt5$cv.statistics$calibration.se[1])
+                 )
+df3
+k3<-ggplot(df3, aes(grp,calibration.intercept,ymin=calibration.intercept-se,ymax=calibration.intercept+se))
+k3+geom_pointrange()
+
+## slope
+df4<- data.frame(grp=c("Full model", "Selected scales", "cell level", "250m Gaussian smooth", "750m Gaussian smooth"),
+                 calibration.slope=c(brt1$cv.statistics$calibration.mean[2],
+                                         brt2$cv.statistics$calibration.mean[2],
+                                         brt3$cv.statistics$calibration.mean[2],
+                                         brt4$cv.statistics$calibration.mean[2],
+                                         brt5$cv.statistics$calibration.mean[2]),
+                 se=c(brt1$cv.statistics$calibration.se[2],
+                      brt2$cv.statistics$calibration.se[2],
+                      brt3$cv.statistics$calibration.se[2],
+                      brt4$cv.statistics$calibration.se[2],
+                      brt5$cv.statistics$calibration.se[2])
+)
+df4
+k4<-ggplot(df4, aes(grp,calibration.slope,ymin=calibration.slope-se,ymax=calibration.slope+se))
+k4+geom_pointrange()
+
 
 # Plotting deviance for each brt model ####
 dev_plot<-function(brt){
@@ -653,35 +789,17 @@ dev_plot<-function(brt){
 dev_plot(brt2)
 
 
+
+
+
+
 # Assessing sampling representativeness ### OUTDATED!!! ####
-load("D:/CHID regional Alberta BRT/BRT_outputs/model1/CAWAbrtAB.R") # load example brt
-brt1$var.names
-mess1<-mess(abs2011_1km[[brt1$var.names]], extract(abs2011_1km[[brt1$var.names]],cbind(datcombo$X,datcombo$Y)))
+
+brt2$var.names
+mess1<-mess(pred_abs_2011[[brt2$var.names]], extract(pred_abs_2011[[brt2$var.names]],cbind(datcombo$X,datcombo$Y)))
 
 writeRaster(mess1, filename="mess_brt_preds.tif", format="GTiff",overwrite=TRUE)
 
 
 
-# mean and coefficient of variation among the 20 brt models ### OUTDATED!!! ####
-load("D:/CHID regional Alberta BRT/BRT_outputs/model1/CAWAbrtAB.R")
-brt_preds<-stack(raster("D:/CHID regional Alberta BRT/BRT_outputs/model1/CAWA_pred1km.tif"))
-names(brt_preds)<-"model1"
-for(i in 2:20){
-  brt_preds <- addLayer(brt_preds, raster(paste("D:/CHID regional Alberta BRT/BRT_outputs/model",i,"/CAWA_pred1km.tif",sep="")))
-  names(brt_preds)[[i]] <- paste("model",i,sep="")
-}
 
-brt_preds<-addLayer(brt_preds,overlay(brt_preds,fun=mean, na.rm=T))
-names(brt_preds[[21]])<-"mean"
-
-brt_preds<-addLayer(brt_preds,overlay(brt_preds,fun=sd, na.rm=T))
-names(brt_preds[[22]])<-"SD"
-
-brt_preds<-addLayer(brt_preds,overlay(brt_preds,fun=function(x) sd(x, na.rm=T)/mean(x,na.rm=T)))
-names(brt_preds[[23]])<-"CV"
-
-
-setwd("D:/CHID regional Alberta BRT/BRT_outputs")
-writeRaster(brt_preds$mean, filename="mean_brt_preds.tif", format="GTiff",overwrite=TRUE)
-writeRaster(brt_preds$SD, filename="SD_brt_preds.tif", format="GTiff",overwrite=TRUE)
-writeRaster(brt_preds$CV, filename="CV_brt_preds.tif", format="GTiff",overwrite=TRUE)
