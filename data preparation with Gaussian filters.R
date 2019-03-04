@@ -143,22 +143,22 @@ watAB_Gauss250<-focal(watAB,w=fw250,na.rm=TRUE)
 watAB_Gauss750<-focal(watAB,w=fw750,na.rm=TRUE)
 
 # climate data- upload and resample to 250m resolution to match other layers, and attach to abs2011
-climateAW2010 <- list.files("D:/ClimateAdaptWest/baseline19812010/",pattern="asc$")
-setwd("D:/ClimateAdaptWest/baseline19812010/")
-clim2010 <- stack(raster(climateAW2010[1]))
-for (i in 2:length(climateAW2010)) { clim2010 <- addLayer(clim2010, raster(climateAW2010[i]))}
-proj4string(clim2010)<-LCC
-aclim2010 <- crop(clim2010,abs2011)
-aclim2010<-resample(clim2010,abs2011)
-aclim2010<-mask(aclim2010,abs2011$LandCover_NonVeg_v1)
+#climateAW2010 <- list.files("D:/ClimateAdaptWest/baseline19812010/",pattern="asc$")
+#setwd("D:/ClimateAdaptWest/baseline19812010/")
+#clim2010 <- stack(raster(climateAW2010[1]))
+#for (i in 2:length(climateAW2010)) { clim2010 <- addLayer(clim2010, raster(climateAW2010[i]))}
+#proj4string(clim2010)<-LCC
+#aclim2010 <- crop(clim2010,abs2011)
+#aclim2010<-resample(clim2010,abs2011)
+#aclim2010<-mask(aclim2010,abs2011$LandCover_NonVeg_v1)
  
-writeRaster(aclim2010, filename="D:/ClimateAdaptWest/baseline19812010/Processed/AB/aclim2010.grd", format="raster",overwrite=TRUE)
+#writeRaster(aclim2010, filename="D:/ClimateAdaptWest/baseline19812010/Processed/AB/aclim2010.grd", format="raster",overwrite=TRUE)
 #aclim2010<-stack("D:/ClimateAdaptWest/baseline19812010/Processed/AB/aclim2010.grd")
 
-for(i in 1:length(names(aclim2010))){ 
-  abs2011 <- addLayer(abs2011, aclim2010[[i]])
-  names(abs2011)[nlayers(abs2011)] <- names(aclim2010[[i]])
-}
+#for(i in 1:length(names(aclim2010))){ 
+#  abs2011 <- addLayer(abs2011, aclim2010[[i]])
+#  names(abs2011)[nlayers(abs2011)] <- names(aclim2010[[i]])
+#}
 
 # put together prediction rasterstack
 ## need to update names of layers with Gaussian filters first to differentiate them
@@ -183,7 +183,7 @@ writeRaster(pred_abs_2011, filename="D:/CHID regional Alberta BRT/prediction dat
 
 # Extracting data from rasters for surveyed locations (ABSS)
 ## 2011
-dat2011 <- cbind(ABSS, extract(abs2011,as.matrix(cbind(ABSS$X,ABSS$Y)))) # includes Beaudoin layers (250m, no Gaussian filter), HF and climate
+dat2011 <- cbind(ABSS, extract(abs2011,as.matrix(cbind(ABSS$X,ABSS$Y)))) # includes Beaudoin layers (250m, no Gaussian filter), HF 
 
 for(i in 1:nlayers(abs2011_Gauss250)){
   dat2011 <- cbind(dat2011, extract(abs2011_Gauss250[[i]],as.matrix(cbind(ABSS$X,ABSS$Y)))) # includes Beaudoin layers with Gaussian filter sigma=250m
@@ -235,7 +235,7 @@ write.csv(dat2011,"ABdat2011.csv")
 ## 2001
 dat2001 <- cbind(ABSS, extract(abs2001,as.matrix(cbind(ABSS$X,ABSS$Y)))) # includes Beaudoin layers (250m, no Gaussian filter), HF and climate
 
-for(i in which(names(abs2011)=="CultivationAbandoned"):which(names(abs2011)=="TD") ) { # copy human footprint and climate data from dat2011
+for(i in which(names(abs2011)=="CultivationAbandoned"):which(names(abs2011)=="TransmissionLine") ) { # copy human footprint  data from dat2011
   dat2001<-cbind(dat2001,extract(abs2011[[i]],as.matrix(cbind(ABSS$X,ABSS$Y))))
   names(dat2001)[ncol(dat2001)] <- names(abs2011)[[i]]
 }
