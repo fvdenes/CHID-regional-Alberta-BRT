@@ -1047,4 +1047,13 @@ writeRaster(mess1, filename="D:/CHID regional Alberta BRT/BRT_outputs/selected_s
 
 gc()
 
+# interrogate and find interactions for 'selected scales' model ####
+find.int <- gbm.interactions(brt)
+find.int$interactions
+find.int$rank.list
 
+gbm.perspec(brt, 2, 9, theta=310)
+
+gbm.perspec(brt, 13, 9, theta=310)
+
+gbm.perspec(brt, 13, 2, theta=310)
