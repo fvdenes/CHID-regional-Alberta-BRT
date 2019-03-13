@@ -32,8 +32,8 @@ alberta<-projectRaster(alberta,crs=LCC)
 plot(alberta)
 
 # Load Beaudoin layers (2011 and 2001), crop and mask for AB, save as rasters
-b2011 <- list.files("D:/Beaudoin/2011/Processed/sppBiomass_Canada",pattern="tif$")
-setwd("D:/Beaudoin/2011/")
+b2011 <- list.files("D:/Beaudoin/2011/Processed/sppBiomass_Canada_t_per_ha",pattern="tif$")
+setwd("D:/Beaudoin/2011/Processed/sppBiomass_Canada_t_per_ha")
 bs2011 <- stack(raster(b2011[1]))
 for (i in 2:length(b2011)) { bs2011 <- addLayer(bs2011, raster(b2011[i]))}
 names(bs2011) <- gsub("NFI_MODIS250m_2011_kNN_","",names(bs2011))
@@ -42,8 +42,8 @@ abs2011 <- mask(abs2011,alberta)
 writeRaster(abs2011, filename="D:/Beaudoin/2011/Processed/AB/abs2011_250m.grd", format="raster",overwrite=TRUE)
 abs2011<-stack("D:/Beaudoin/2011/Processed/AB/abs2011_250m.grd")
 
-b2001 <- list.files("D:/Beaudoin/2001/Processed/sppBiomass_Canada",pattern="tif$")
-setwd("D:/Beaudoin/2001/")
+b2001 <- list.files("D:/Beaudoin/2001/Processed/sppBiomass_Canada_t_per_ha",pattern="tif$")
+setwd("D:/Beaudoin/2001/Processed/sppBiomass_Canada_t_per_ha")
 bs2001 <- stack(raster(b2001[1]))
 for (i in 2:length(b2001)) { bs2001 <- addLayer(bs2001, raster(b2001[i]))}
 names(bs2001) <- gsub("NFI_MODIS250m_2001_kNN_","",names(bs2001))

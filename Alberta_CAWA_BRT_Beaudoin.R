@@ -823,6 +823,8 @@ sum(density_brt2_250m)
 rm(list=setdiff(ls(),c("datcombo","sp_block_select","pred_abs_2011","blockCV_brt","brt2")))
 gc()
 
+# consider speeding up the function below by replacing gbm.step with gbm with the number of trees identified in the model 
+
 boot_brt<-function(data,brtmodel,blocks,pred.data,nsamples=100,output.folder){
   #rast <-  predict(pred.data,
   #                 brtmodel,
