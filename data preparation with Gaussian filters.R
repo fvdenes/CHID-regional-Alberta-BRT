@@ -9,22 +9,24 @@ library(dplyr)
 # Preparing data
 
 # Load avian datasets, AB region raster, project and extract data for AB, 
-load("D:/Avian data processed/data_package_2016-04-18.Rdata")	
-load("D:/Avian data processed/offsets-v3_2016-04-18.Rdata")
-LCC <- CRS("+proj=lcc +lat_1=49 +lat_2=77 +lat_0=0 +lon_0=-95 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs")
-coordinates(SS) <- c("X", "Y") 
-proj4string(SS) <- CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")
-SSLCC <- as.data.frame(spTransform(SS, LCC))
-ABSS <- SSLCC[SSLCC$JURS=="AB",]
-rm(SSLCC)
-gc()
+load("D:/Avian data processed/BAM_data_package_August2019.RData")
 
-offl <- data.table(melt(OFF))
-names(offl) <- c("PKEY","SPECIES","logoffset")
-offl$SPECIES <- as.character(offl$SPECIES)
-offl$PKEY <-as.character(offl$PKEY)
-rm(OFF)
-gc()
+# load("D:/Avian data processed/data_package_2016-04-18.Rdata")	
+# load("D:/Avian data processed/offsets-v3_2016-04-18.Rdata")
+# LCC <- CRS("+proj=lcc +lat_1=49 +lat_2=77 +lat_0=0 +lon_0=-95 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs")
+# coordinates(SS) <- c("X", "Y") 
+# proj4string(SS) <- CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")
+# SSLCC <- as.data.frame(spTransform(SS, LCC))
+# ABSS <- SSLCC[SSLCC$JURS=="AB",]
+# rm(SSLCC)
+# gc()
+# 
+# offl <- data.table(melt(OFF))
+# names(offl) <- c("PKEY","SPECIES","logoffset")
+# offl$SPECIES <- as.character(offl$SPECIES)
+# offl$PKEY <-as.character(offl$PKEY)
+# rm(OFF)
+
 
 eco <- raster("D:/CHID regional Alberta BRT/spatial/albertaeco1.tif") 
 alberta <- raster("D:/CHID regional Alberta BRT/spatial/AlbertaLCC.tif")
@@ -32,8 +34,8 @@ alberta<-projectRaster(alberta,crs=LCC)
 plot(alberta)
 
 # Load Beaudoin layers (2011 and 2001), crop and mask for AB, save as rasters
-b2011 <- list.files("D:/Beaudoin/2011/Processed/sppBiomass_Canada_t_per_ha",pattern="tif$")
-setwd("D:/Beaudoin/2011/Processed/sppBiomass_Canada_t_per_ha")
+b2011 <- list.files("D:/Beaudoin/2011/",pattern="tif$")
+setwd("D:/Beaudoin/2011/")
 bs2011 <- stack(raster(b2011[1]))
 for (i in 2:length(b2011)) { bs2011 <- addLayer(bs2011, raster(b2011[i]))}
 names(bs2011) <- gsub("NFI_MODIS250m_2011_kNN_","",names(bs2011))
@@ -42,8 +44,8 @@ abs2011 <- mask(abs2011,alberta)
 writeRaster(abs2011, filename="D:/Beaudoin/2011/Processed/AB/abs2011_250m.grd", format="raster",overwrite=TRUE)
 abs2011<-stack("D:/Beaudoin/2011/Processed/AB/abs2011_250m.grd")
 
-b2001 <- list.files("D:/Beaudoin/2001/Processed/sppBiomass_Canada_t_per_ha",pattern="tif$")
-setwd("D:/Beaudoin/2001/Processed/sppBiomass_Canada_t_per_ha")
+b2001 <- list.files("D:/Beaudoin/2001/",pattern="tif$")
+setwd("D:/Beaudoin/2001/")
 bs2001 <- stack(raster(b2001[1]))
 for (i in 2:length(b2001)) { bs2001 <- addLayer(bs2001, raster(b2001[i]))}
 names(bs2001) <- gsub("NFI_MODIS250m_2001_kNN_","",names(bs2001))
@@ -140,7 +142,10 @@ watAB<- crop(wat,alberta)
 watAB<- mask(watAB,abs2011[[1]])
 
 watAB_Gauss250<-focal(watAB,w=fw250,na.rm=TRUE)
+watAB_Gauss250[which(is.nan(getValues(watAB_Gauss250)))]<-NA
+
 watAB_Gauss750<-focal(watAB,w=fw750,na.rm=TRUE)
+watAB_Gauss750[which(is.nan(getValues(watAB_Gauss750)))]<-NA
 
 # climate data- upload and resample to 250m resolution to match other layers, and attach to abs2011
 #climateAW2010 <- list.files("D:/ClimateAdaptWest/baseline19812010/",pattern="asc$")
@@ -178,11 +183,27 @@ names(watAB_Gauss250) <- "watAB_Gauss250"
 names(watAB_Gauss750) <- "watAB_Gauss750"
 
 pred_abs_2011<-stack(abs2011,abs2011_Gauss250,abs2011_Gauss750,cti250,cti250_Gauss250,cti250_Gauss750,watAB, watAB_Gauss250, watAB_Gauss750,quick=TRUE)
+
+ARU<-raster(extent(pred_abs_2011),crs=LCC,resolution=res(pred_abs_2011),vals=0)
+names(ARU)<-"ARU"
+
+pred_abs_2011<-stack(abs2011,abs2011_Gauss250,abs2011_Gauss750,cti250,cti250_Gauss250,cti250_Gauss750,watAB, watAB_Gauss250, watAB_Gauss750, ARU,quick=TRUE)
+
 writeRaster(pred_abs_2011, filename="D:/CHID regional Alberta BRT/prediction dataset/abs2011_250m.grd", format="raster",overwrite=TRUE)
 
 
 # Extracting data from rasters for surveyed locations (ABSS)
 ## 2011
+
+ABSS<-SpatialPointsDataFrame(coords=SScombo[,2:3],data=SScombo, proj4string = LCC)
+
+ab_shp<-readOGR("D:/CHID regional Alberta BRT/spatial","AB_eco1") # read in a shapefile of Alberta with which to crop the SScombo spatial df. cannot use raster as it will crop by raster extent, not the province extent
+ab_shp<-spTransform(ab_shp,LCC)
+
+ABSS<-crop(ABSS,ab_shp)
+ABSS<-ABSS@data
+ABSS
+
 dat2011 <- cbind(ABSS, extract(abs2011,as.matrix(cbind(ABSS$X,ABSS$Y)))) # includes Beaudoin layers (250m, no Gaussian filter), HF 
 
 for(i in 1:nlayers(abs2011_Gauss250)){
@@ -226,8 +247,8 @@ names(dat2011)[ncol(dat2011)] <- "sampsum25"
 dat2011$wt <- 1/dat2011$sampsum25
 
 dat2011$SS <- as.character(dat2011$SS)
-dat2011$PCODE <- as.character(dat2011$PCODE)
-dat2011<-dat2011[,-c(25:43)] # remove columns with climate data (from avian dataset, since using Adaptwest Climate data instead)
+# dat2011$PCODE <- as.character(dat2011$PCODE)
+# dat2011<-dat2011[,-c(25:43)] # remove columns with climate data (from avian dataset, since using Adaptwest Climate data instead)
 
 setwd("D:/CHID regional Alberta BRT/")
 write.csv(dat2011,"ABdat2011.csv")
@@ -279,32 +300,38 @@ names(dat2001)[ncol(dat2001)] <- "sampsum25"
 dat2001$wt <- 1/dat2001$sampsum25
 
 dat2001$SS <- as.character(dat2001$SS)
-dat2001$PCODE <- as.character(dat2001$PCODE)
-dat2001<-dat2001[,-c(25:43)] # remove columns with climate data (from avian dataset, since using Adaptwest Climate data instead)
+# dat2001$PCODE <- as.character(dat2001$PCODE)
+# dat2001<-dat2001[,-c(25:43)] # remove columns with climate data (from avian dataset, since using Adaptwest Climate data instead)
 write.csv(dat2001,"ABdat2001.csv")
 
 
 # Prepare point count data for each SS and aggregate for 2001 and 2011.
 
 
-PC <- inner_join(PCTBL,PKEY[,1:8],by=c("PKEY","SS"))[,-1]
-colnames(PC)[10]<-"PCODE"
-PC <- inner_join(PC,SS@data[,c(2,5)],by="SS")
-ABPC <- PC[PC$JURS=="AB",]
+# PC <- inner_join(PCTBL,PKEY[,1:8],by=c("PKEY","SS"))[,-1]
+# colnames(PC)[10]<-"PCODE"
+# PC <- inner_join(PC,SS@data[,c(2,5)],by="SS")
+# ABPC <- PC[PC$JURS=="AB",]
+
+PC<-inner_join(PCcombo,PKEYcombo,by=c("PKEY"))
+PC<-inner_join(PC,SScombo,by="SS")
+names(PC)
+
+ABPC <- PC[which(PC$SS%in%ABSS$SS),]
 
 ABPC$SS <- as.character(ABPC$SS)
 ABPC$PKEY <- as.character(ABPC$PKEY)
-ABPC$PCODE <- as.character(ABPC$PCODE)
+# ABPC$PCODE <- as.character(ABPC$PCODE)
 ABPC$SPECIES <- as.character(ABPC$SPECIES)
 ABPC2001 <- ABPC[ABPC$YEAR < 2006,] #n=418337
 ABPC2011 <- ABPC[ABPC$YEAR > 2005,] #n=400780
-survey2001 <- aggregate(ABPC2001$ABUND, by=list("PKEY"=ABPC2001$PKEY,"SS"=ABPC2001$SS,"PCODE"=ABPC2001$PCODE), FUN=sum) #n=31838
-survey2011 <- aggregate(ABPC2011$ABUND, by=list("PKEY"=ABPC2011$PKEY,"SS"=ABPC2011$SS,"PCODE"=ABPC2011$PCODE), FUN=sum) #n=26239
+survey2001 <- aggregate(ABPC2001$ABUND, by=list("PKEY"=ABPC2001$PKEY,"SS"=ABPC2001$SS,"ARU"=ABPC2001$ARU), FUN=sum) #n=31838
+survey2011 <- aggregate(ABPC2011$ABUND, by=list("PKEY"=ABPC2011$PKEY,"SS"=ABPC2011$SS,"ARU"=ABPC2011$ARU), FUN=sum) #n=26239
 
-speclist<-levels(as.factor(offl$SPECIES))
+speclist<-levels(as.factor(offcombo$SPECIES))
 
+save.image("D:/CHID regional Alberta BRT/AB_BRT_Rproject/data_pack_full.RData")
 
-
-rm(list=setdiff(ls(),c("pred_abs_2011","LCC","speclist","offl","ABPC2001","survey2001","dat2001","ABPC2011","survey2011","dat2011")))
+rm(list=setdiff(ls(),c("pred_abs_2011","LCC","speclist","offcombo","ABPC2001","survey2001","dat2001","ABPC2011","survey2011","dat2011")))
 gc()
 save.image("D:/CHID regional Alberta BRT/AB_BRT_Rproject/data_pack.RData")

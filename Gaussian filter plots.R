@@ -108,4 +108,12 @@ lines(x, mix1, col=2,lwd=2)
 legend("topright", inset=.05,  legend=c("250m cell","Gaussian mixture 'doughnut' (2 modes at -1000, 1000)","Gaussian mixture 'cinnamon roll' (3 modes at -1000, 0, 1000)"), lwd=c(1,2,2), lty=c(2,1,1), col=c(1,4,2))
 
 
+# plot 8
+plot(x, y1, type="n", lty=1, xlab="distance",ylab="Density", main="")
+abline(v=-125,lty=2)
+abline(v=125,lty=2)
 
+lines(x, dnorm(x,0,sd=250),lwd=2, col=4)
+#lines(x, dnorm(x,0,500), lwd=2, col=4)
+lines(x, dnorm(x,0,750), lwd=2, col="red")
+legend("topright", inset=.05,  legend=c("250m cell","GF (mean=0, sigma=250m)","GF (mean=0, sigma=750m)"), lwd=c(1,2,2), lty=c(2,1,1), col=c(1,4,"red"))

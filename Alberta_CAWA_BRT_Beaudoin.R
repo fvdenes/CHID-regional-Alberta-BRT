@@ -154,7 +154,7 @@ brt_blocks <- function(data = datcombo, pred.stack = pred_abs_2011, seed = 1222,
       overwrite = TRUE
     )
     
-    data_sp <-SpatialPointsDataFrame(coords = data[, 34:35], data = data, proj4string = LCC)
+    data_sp <-SpatialPointsDataFrame(coords = data[, c("X","Y")], data = data, proj4string = LCC)
     png(paste(z, speclist[j], "_pred1km.png", sep = ""))
     plot(rast, zlim = c(0, 1))
     points(data_sp$X, data_sp$Y, cex = 0.05)
@@ -182,7 +182,7 @@ load("D:/CHID regional Alberta BRT/AB_BRT_Rproject/data_pack.RData")
 
 j<-which(speclist=="CAWA") 
 
-specoff <- filter(offl, SPECIES==as.character(speclist[j]))
+specoff <- filter(offcombo, SPECIES==as.character(speclist[j]))
 specoff <- distinct(specoff)
 
 specdat2001 <- filter(ABPC2001, SPECIES == as.character(speclist[j]))
@@ -208,12 +208,11 @@ datcombo <- rbind(d2001,d2011)
 datcombo$eco <- as.factor(datcombo$eco)
 
 
-
 rm(list=setdiff(ls(),c("datcombo","datcombo_sp","pred_abs_2011","w","LCC","speclist","randomCV_brt","j","blockCV_brt","brt_blocks")))
 gc()
 
 # convert data into SpatialPointDataFrame class
-datcombo_sp <-SpatialPointsDataFrame(coords = datcombo[, 34:35], data = datcombo, proj4string = LCC)
+datcombo_sp <-SpatialPointsDataFrame(coords = datcombo[, c("X", "Y")], data = datcombo, proj4string = LCC)
 # create a column converting abundance to occupancy
 datcombo_sp$OCCU <- 0 
 datcombo_sp$OCCU[which(datcombo_sp$ABUND > 0)] <- 1
@@ -276,7 +275,8 @@ pred.variables<-c(
   "TransmissionLine",
   "watAB",
   "watAB_Gauss250",
-  "watAB_Gauss750"
+  "watAB_Gauss750",
+  "ARU"
 )
 
 
@@ -284,7 +284,7 @@ pred.variables<-c(
 
 
 # create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, etc).
-ind <- which(names(pred_abs_2011) %in% pred.variables[-55])
+ind <- which(names(pred_abs_2011) %in% pred.variables[-298])
 
 # Calculate autocorrelation range
 start_time <- Sys.time()
@@ -306,6 +306,7 @@ sp_block_full <-  spatialBlock(
   )
 end_time <- Sys.time()
 end_time - start_time
+
 
 start_time<-Sys.time()
 brt1<- brt_blocks(data=datcombo,pred.variables = pred.variables, output.folder = "D://CHID regional Alberta BRT/BRT_outputs/full_model/", blocks=sp_block_full, save.points.shp = TRUE, lr=0.01)  
@@ -369,7 +370,8 @@ pred.variables2<-c(
   "TransmissionLine",
   #"watAB",
   #"watAB_Gauss250",
-  "watAB_Gauss750"
+  "watAB_Gauss750",
+  "ARU"
 )
 
 # create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, HF, etc).
@@ -459,7 +461,8 @@ pred.variables3<-c(
   "SeismicLineNarrow",
   "SeismicLineWide",
   "TransmissionLine",
-  "watAB"
+  "watAB",
+  "ARU"
 )
 
 # create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, HF, etc).
@@ -549,9 +552,9 @@ pred.variables4<-c(
   "SeismicLineWide",
   "TransmissionLine",
   #"watAB",
-  "watAB_Gauss250"
-  #,
+  "watAB_Gauss250",
   #"watAB_Gauss750",
+  "ARU"
 )
 
 # create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, HF, etc).
@@ -643,7 +646,8 @@ pred.variables5<-c(
   "TransmissionLine",
   #"watAB",
   #"watAB_Gauss250",
-  "watAB_Gauss750"
+  "watAB_Gauss750",
+  "ARU"
 )
 
 # create object storing the indices of predictor layers (from the prediction dataset) for the autocorrelation assessment that will inform block size. Only include continuous numeric variables here. Can use indexing "[-c(x:y)] to exclude them (e.g. exclude climate variables, HF, etc).
